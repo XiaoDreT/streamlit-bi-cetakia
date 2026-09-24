@@ -1,0 +1,62 @@
+# ==========================================
+# Byte-compiled / optimized / DLL files
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ==========================================
+# Virtual Environments
+# ==========================================
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# IDE & Editor Configurations
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# Temporary, Backup & Office Lock Files
+# ==========================================
+.~lock.*
+.~lock.*#
+*.tmp
+*.temp
+*.bak
+
+# ==========================================
+# Jupyter Notebook Checkpoints
+# ==========================================
+.ipynb_checkpoints/
+
+# ==========================================
+# Streamlit Secrets & Credentials
+# ==========================================
+.streamlit/secrets.toml
+
+# ==========================================
+# Temporary Agent Media & Scratch Artifacts
+# ==========================================
+scratch/
+.tempmediaStorage/
+.user_uploaded/
+
+# ==========================================
+# Optional: Raw Large Datasets
+# (Uncomment below if you do NOT want to track large CSVs on GitHub)
+# ==========================================
+# docs/*.csv
+# docs/**/*.csv
