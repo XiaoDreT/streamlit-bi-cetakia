@@ -35,6 +35,8 @@ def load_customer_data() -> pd.DataFrame:
             df[date_col] = normalize_date_column(df[date_col])
     return df
 
+load_customer_master = load_customer_data
+
 @st.cache_data(show_spinner=False)
 def load_sales_data(include_cancelled: bool = False) -> pd.DataFrame:
     """Loads 02_sales_transaction_extract.csv with normalized datetime types.

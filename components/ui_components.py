@@ -39,6 +39,24 @@ def format_rupiah(val, include_decimal: bool = False) -> str:
     except Exception:
         return f"Rp {val}"
 
+def format_data_value(val, fmt: str = "str", fallback: str = "Belum Ada Data") -> str:
+    """Safely formats data values, replacing NaN, null, or empty values with fallback string."""
+    if pd.isna(val) or val is None or str(val).strip().lower() in ["nan", "none", "", "nat", "inf", "-inf"]:
+        return fallback
+    if fmt == "currency":
+        return format_rupiah(val)
+    elif fmt == "int":
+        try:
+            return f"{int(round(float(val))):,}".replace(",", ".")
+        except Exception:
+            return fallback
+    elif fmt == "pct":
+        try:
+            return f"{float(val):.1f}%"
+        except Exception:
+            return fallback
+    return str(val)
+
 # Complete Translation Dictionary
 TRANSLATIONS = {
     "ID": {
@@ -211,14 +229,6 @@ html:not([data-theme]) .cetakia-logo-light {{
 html:not([data-theme]) .cetakia-logo-dark {{
     display: none;
 }}
-@media (prefers-color-scheme: dark) {{
-    html:not([data-theme]) .cetakia-logo-light {{
-        display: none;
-    }}
-    html:not([data-theme]) .cetakia-logo-dark {{
-        display: block;
-    }}
-}}
 
 /* Explicit data-theme rules applied dynamically */
 [data-theme="dark"] .cetakia-logo-light,
@@ -247,19 +257,6 @@ html[data-theme="light"] .cetakia-logo-dark,
 .stApp[data-theme="light"] .cetakia-logo-dark,
 .cetakia-sidebar-logo-box[data-theme="light"] .cetakia-logo-dark {{
     display: none !important;
-}}
-
-/* Custom Sidebar Menu Name: Change ONLY the first item ('app') to 'Insight Catalog' */
-ul[data-testid="stSidebarNavItems"] > li:first-child a span,
-div[data-testid="stSidebarNav"] > ul > li:first-child a span {{
-    font-size: 0 !important;
-}}
-ul[data-testid="stSidebarNavItems"] > li:first-child a span::before,
-div[data-testid="stSidebarNav"] > ul > li:first-child a span::before {{
-    content: "Insight Catalog" !important;
-    font-size: 14px !important;
-    font-weight: 500 !important;
-    visibility: visible !important;
 }}
 
 /* Custom Card Container Adapting to Native Theme */
@@ -480,6 +477,70 @@ def render_insight_card(title: str, metric: str, context: str, insight: str, act
 </div>"""
     st.markdown(card_html, unsafe_allow_html=True)
 
+def render_business_insight_card(
+    title: str,
+    metric: str,
+    context: str,
+    insight: str,
+    who_impacted: str,
+    action: str,
+    badge: str = "DECISION SUPPORT RULE",
+    target_entity: str = None
+):
+    """Renders stricter V1.1 DSS Business Insight Card following:
+    Metric + Context + Insight + Who is Impacted + Recommended Action (+ Target Entity)
+    """
+    lang_code = st.session_state.get("lang_code", "ID")
+    if lang_code == "EN":
+        lbl_metric = "1. OBSERVED METRIC (WHAT HAPPENED)"
+        lbl_context = "2. CONTEXT & BASELINE"
+        lbl_insight = "3. ROOT CAUSE INSIGHT (WHY IT HAPPENED)"
+        lbl_impacted = "4. IMPACTED ENTITIES (WHO IS IMPACTED)"
+        lbl_action = "🚀 5. RECOMMENDED BUSINESS ACTION (ACTIONABLE WORKFLOW)"
+        lbl_target = "Target Entity / Operational SLA:"
+    else:
+        lbl_metric = "1. METRIK TERAMATI (WHAT HAPPENED)"
+        lbl_context = "2. KONTEKS & BASELINE"
+        lbl_insight = "3. INSIGHT PENYEBAB UTAMA (WHY IT HAPPENED)"
+        lbl_impacted = "4. ENTITAS TERDAMPAK (WHO IS IMPACTED)"
+        lbl_action = "🚀 5. REKOMENDASI TINDAKAN BISNIS (ACTIONABLE WORKFLOW)"
+        lbl_target = "Target Entitas / SLA Operasional:"
+
+    target_html = f'<div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(16, 185, 129, 0.4); font-size: 13px;"><b>🎯 {lbl_target}</b> {target_entity}</div>' if target_entity else ""
+    
+    card_html = f"""<div class="cetakia-insight-card">
+<div class="insight-header">
+<div class="insight-title">💡 {title}</div>
+<div class="insight-badge">{badge}</div>
+</div>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px;">
+<div class="insight-section">
+<div class="insight-label">{lbl_metric}</div>
+<div class="insight-content-metric">{metric}</div>
+</div>
+<div class="insight-section">
+<div class="insight-label">{lbl_context}</div>
+<div class="insight-content-text">{context}</div>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px;">
+<div class="insight-section">
+<div class="insight-label">{lbl_insight}</div>
+<div class="insight-content-text">{insight}</div>
+</div>
+<div class="insight-section">
+<div class="insight-label">{lbl_impacted}</div>
+<div class="insight-content-text" style="color: #F59E0B; font-weight: 600;">{who_impacted}</div>
+</div>
+</div>
+<div class="insight-action-box">
+<div class="insight-action-title">{lbl_action}</div>
+<div class="insight-action-desc">{action}</div>
+{target_html}
+</div>
+</div>"""
+    st.markdown(card_html, unsafe_allow_html=True)
+
 def global_sidebar_filters(df_sales=None, df_customers=None):
     """Generates standardized global filter sidebar with Language selector and theme-adaptive logo."""
     inject_custom_css()
@@ -488,75 +549,84 @@ def global_sidebar_filters(df_sales=None, df_customers=None):
     dark_b64 = _get_logo_b64("cetakia_text_dark.webp")
     light_b64 = _get_logo_b64("cetakia_text_light.webp")
     
-    # Render logo and theme observer in sidebar
-    st.sidebar.markdown(f'''
-    <div class="cetakia-sidebar-logo-box" id="cetakia-sidebar-logo">
-        <img src="data:image/webp;base64,{light_b64}" class="cetakia-logo-light" alt="Cetakia Logo Light" />
-        <img src="data:image/webp;base64,{dark_b64}" class="cetakia-logo-dark" alt="Cetakia Logo Dark" />
+    # Render theme-adaptive logo using st.sidebar.html
+    st.sidebar.html(f'''
+    <div class="cetakia-sidebar-logo-box" id="cetakia-sidebar-logo" style="margin-bottom: 12px; display: flex; align-items: center; min-height: 48px;">
+        <img src="data:image/webp;base64,{light_b64}" class="cetakia-logo-light" alt="Cetakia Logo Light" style="max-width: 160px; height: auto;" />
+        <img src="data:image/webp;base64,{dark_b64}" class="cetakia-logo-dark" alt="Cetakia Logo Dark" style="max-width: 160px; height: auto; display: none;" />
     </div>
-    <iframe srcdoc="&lt;script&gt;
+    <script>
     (function() {{
-        var pdoc = window.parent.document;
-        var pwin = window.parent;
         function detectTheme() {{
-            var sidebar = pdoc.querySelector('[data-testid=&quot;stSidebar&quot;]');
-            var target = sidebar || pdoc.querySelector('.stApp') || pdoc.body;
-            if (target) {{
-                var bg = pwin.getComputedStyle(target).backgroundColor;
-                var match = bg.match(/\\d+/g);
-                if (match &amp;&amp; match.length &gt;= 3) {{
-                    var r = Number(match[0]), g = Number(match[1]), b = Number(match[2]);
-                    var brightness = (0.299 * r + 0.587 * g + 0.114 * b);
-                    return brightness &lt; 128 ? 'dark' : 'light';
+            try {{
+                var sidebar = document.querySelector('[data-testid="stSidebar"]') || document.querySelector('section[data-testid="stSidebar"]');
+                var app = document.querySelector('.stApp');
+                var el = sidebar || app || document.body;
+                if (el) {{
+                    var appStyle = window.getComputedStyle(el);
+                    var bg = appStyle.backgroundColor;
+                    var bgMatch = bg && bg.match(/[0-9]+/g);
+                    if (bgMatch && bgMatch.length >= 3) {{
+                        var r = Number(bgMatch[0]), g = Number(bgMatch[1]), b = Number(bgMatch[2]);
+                        var a = bgMatch[3] !== undefined ? parseFloat(bgMatch[3]) : 1;
+                        if (a > 0.05 && (r !== 0 || g !== 0 || b !== 0 || a === 1)) {{
+                            var bgBrightness = 0.299 * r + 0.587 * g + 0.114 * b;
+                            return bgBrightness < 128 ? 'dark' : 'light';
+                        }}
+                    }}
+                    var col = appStyle.color;
+                    var colMatch = col && col.match(/[0-9]+/g);
+                    if (colMatch && colMatch.length >= 3) {{
+                        var cr = Number(colMatch[0]), cg = Number(colMatch[1]), cb = Number(colMatch[2]);
+                        var cBrightness = 0.299 * cr + 0.587 * cg + 0.114 * cb;
+                        return cBrightness > 128 ? 'dark' : 'light';
+                    }}
                 }}
-            }}
-            for (var i = 0; i &lt; pwin.localStorage.length; i++) {{
-                var k = pwin.localStorage.key(i);
-                if (k &amp;&amp; k.startsWith('stActiveTheme')) {{
-                    try {{
-                        var val = JSON.parse(pwin.localStorage.getItem(k));
-                        if (val === 'Dark') return 'dark';
-                        if (val === 'Light') return 'light';
-                    }} catch(e) {{}}
-                }}
-            }}
-            if (pwin.matchMedia &amp;&amp; pwin.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+            }} catch(e) {{}}
+
             return 'light';
         }}
+
         function syncTheme() {{
             var theme = detectTheme();
             var isDark = (theme === 'dark');
-            pdoc.documentElement.setAttribute('data-theme', theme);
-            pdoc.body.setAttribute('data-theme', theme);
-            var app = pdoc.querySelector('.stApp');
-            if (app) app.setAttribute('data-theme', theme);
-            var boxes = pdoc.querySelectorAll('.cetakia-sidebar-logo-box');
+
+            if (document.documentElement.getAttribute('data-theme') !== theme) {{
+                document.documentElement.setAttribute('data-theme', theme);
+            }}
+
+            var boxes = document.querySelectorAll('.cetakia-sidebar-logo-box');
             boxes.forEach(function(box) {{
-                box.setAttribute('data-theme', theme);
+                if (box.getAttribute('data-theme') !== theme) {{
+                    box.setAttribute('data-theme', theme);
+                }}
                 var lightImg = box.querySelector('.cetakia-logo-light');
                 var darkImg = box.querySelector('.cetakia-logo-dark');
-                if (lightImg) lightImg.style.display = isDark ? 'none' : 'block';
-                if (darkImg) darkImg.style.display = isDark ? 'block' : 'none';
+                var targetLight = isDark ? 'none' : 'block';
+                var targetDark = isDark ? 'block' : 'none';
+                if (lightImg && lightImg.style.display !== targetLight) {{
+                    lightImg.style.setProperty('display', targetLight, 'important');
+                }}
+                if (darkImg && darkImg.style.display !== targetDark) {{
+                    darkImg.style.setProperty('display', targetDark, 'important');
+                }}
             }});
         }}
+
+        window.__cetakia_sync_theme = syncTheme;
         syncTheme();
-        if (!pwin.__cetakia_theme_listener_installed) {{
-            pwin.__cetakia_theme_listener_installed = true;
-            var observer = new MutationObserver(syncTheme);
-            observer.observe(pdoc.documentElement, {{ attributes: true, subtree: true, attributeFilter: ['class', 'style'] }});
-            observer.observe(pdoc.head, {{ childList: true, subtree: true }});
-            if (pwin.matchMedia) pwin.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncTheme);
-            pwin.addEventListener('storage', syncTheme);
-            var ticks = 0;
-            var iv = setInterval(function() {{
-                syncTheme();
-                ticks++;
-                if (ticks &gt; 15) clearInterval(iv);
-            }}, 200);
+
+        if (!window.__cetakia_theme_listener_installed) {{
+            window.__cetakia_theme_listener_installed = true;
+            window.addEventListener('storage', syncTheme);
+            if (window.matchMedia) {{
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncTheme);
+            }}
+            window.setInterval(syncTheme, 300);
         }}
     }})();
-    &lt;/script&gt;" style="display:none;width:0;height:0;border:none;"></iframe>
-    ''', unsafe_allow_html=True)
+    </script>
+    ''', unsafe_allow_javascript=True)
     
     # Language Selector in Sidebar
     lang_options = ["Bahasa Indonesia", "English"]
@@ -571,7 +641,7 @@ def global_sidebar_filters(df_sales=None, df_customers=None):
     st.sidebar.markdown("---")
     st.sidebar.subheader(f"🎛️ {t['select_branch']}")
     
-    # Branch Filter
+    # Branch Filter (Persistent across navigation, resets on browser refresh)
     branch_options = [
         t["all_branches"],
         "Cipta Graha",
@@ -581,9 +651,24 @@ def global_sidebar_filters(df_sales=None, df_customers=None):
         "Cipta Purwakarta",
         "Cipta Online"
     ]
-    selected_branch = st.sidebar.selectbox(t["select_branch"], options=branch_options, index=0)
+    saved_branch = st.session_state.get("global_branch_norm", "All Branches")
+    if saved_branch in ["All Branches", "Semua Cabang"]:
+        branch_idx = 0
+    elif saved_branch in branch_options:
+        branch_idx = branch_options.index(saved_branch)
+    else:
+        branch_idx = 0
+        
+    selected_branch = st.sidebar.selectbox(
+        t["select_branch"],
+        options=branch_options,
+        index=branch_idx,
+        key=f"global_branch_select_{lang_code}"
+    )
+    norm_branch = "All Branches" if selected_branch == t["all_branches"] else selected_branch
+    st.session_state["global_branch_norm"] = norm_branch
     
-    # Customer Segment Filter
+    # Customer Segment Filter (Persistent across navigation, resets on browser refresh)
     segment_options = [
         t["all_segments"],
         "Instansi",
@@ -595,21 +680,50 @@ def global_sidebar_filters(df_sales=None, df_customers=None):
         "Employee",
         "Divisi"
     ]
-    selected_segment = st.sidebar.selectbox(t["select_segment"], options=segment_options, index=0)
+    saved_segment = st.session_state.get("global_segment_norm", "All Segments")
+    if saved_segment in ["All Segments", "Semua Segmen"]:
+        segment_idx = 0
+    elif saved_segment in segment_options:
+        segment_idx = segment_options.index(saved_segment)
+    else:
+        segment_idx = 0
+        
+    selected_segment = st.sidebar.selectbox(
+        t["select_segment"],
+        options=segment_options,
+        index=segment_idx,
+        key=f"global_segment_select_{lang_code}"
+    )
+    norm_segment = "All Segments" if selected_segment == t["all_segments"] else selected_segment
+    st.session_state["global_segment_norm"] = norm_segment
     
-    # Date Range Filter
-    min_date = datetime(2025, 10, 1)
-    max_date = datetime(2026, 9, 19)
+    # Date Range Filter (Persistent across navigation, resets on browser refresh)
+    min_date = datetime(2025, 10, 1).date()
+    max_date = datetime(2026, 9, 19).date()
+    default_date_range = (min_date, max_date)
+    
+    saved_date_range = st.session_state.get("global_date_range_val", default_date_range)
+    if not (isinstance(saved_date_range, (tuple, list)) and len(saved_date_range) == 2):
+        saved_date_range = default_date_range
+        
     date_range = st.sidebar.date_input(
         t["date_interval"],
-        value=(min_date, max_date),
+        value=saved_date_range,
         min_value=min_date,
-        max_value=max_date
+        max_value=max_date,
+        key="global_date_interval_picker"
     )
     
+    if isinstance(date_range, (tuple, list)) and len(date_range) == 2:
+        st.session_state["global_date_range_val"] = date_range
+    else:
+        date_range = saved_date_range
+    
     st.sidebar.markdown("---")
-    st.sidebar.caption(f"📌 **{t['snapshot_cutoff']}:** 19 September 2026")
-    st.sidebar.caption(f"⚡ **{t['data_mode']}:** Master Data Analitis")
+    cutoff_date_str = "September 19, 2026" if lang_code == "EN" else "19 September 2026"
+    data_mode_str = "Master Analytical Data" if lang_code == "EN" else "Master Data Analitis"
+    st.sidebar.caption(f"📌 **{t['snapshot_cutoff']}:** {cutoff_date_str}")
+    st.sidebar.caption(f"⚡ **{t['data_mode']}:** {data_mode_str}")
     
     # Return filter values normalized
     norm_branch = "All Branches" if selected_branch == t["all_branches"] else selected_branch
@@ -628,11 +742,17 @@ def apply_plotly_theme(fig, height=380):
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, sans-serif", size=12),
+        font=dict(family="Inter, -apple-system, sans-serif", size=12),
         margin=dict(l=20, r=20, t=40, b=20),
         height=height,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    fig.update_xaxes(showgrid=True, gridcolor="rgba(156, 163, 175, 0.2)", zeroline=False)
-    fig.update_yaxes(showgrid=True, gridcolor="rgba(156, 163, 175, 0.2)", zeroline=False)
+    fig.update_xaxes(showgrid=True, gridcolor="rgba(156, 163, 175, 0.15)", zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(156, 163, 175, 0.15)", zeroline=False)
+    fig.update_traces(
+        selector=dict(type="bar"),
+        marker_line_color="rgba(255, 255, 255, 0.6)",
+        marker_line_width=1.2,
+        opacity=0.92
+    )
     return fig
