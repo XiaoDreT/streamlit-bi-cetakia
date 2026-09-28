@@ -55,8 +55,12 @@ scratch/
 .user_uploaded/
 
 # ==========================================
-# Optional: Raw Large Datasets
-# (Uncomment below if you do NOT want to track large CSVs on GitHub)
+# Documentation, PRD & Internal Scripts / Datasets
 # ==========================================
-# docs/*.csv
-# docs/**/*.csv
+docs/
+scripts/
+PRD_BI_Cetakia_Integration_Final.md
+PRD_BI_Cetakia_Integration_Final.pdf
+PRD*.md
+PRD*.pdf
+
