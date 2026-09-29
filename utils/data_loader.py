@@ -2,20 +2,29 @@ import os
 import pandas as pd
 import streamlit as st
 
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
 DATA_DIR_SEARCH_PATHS = [
+    os.path.join(BASE_DIR, 'data'),
+    os.path.join(BASE_DIR, 'docs'),
     '/home/zen/Documents/Cetakia/Master Data Cetakia',
-    '../Master Data Cetakia',
-    './Master Data Cetakia',
+    os.path.join(BASE_DIR, '..', 'Master Data Cetakia'),
     './data',
-    './docs'
+    './docs',
+    '../Master Data Cetakia',
+    './Master Data Cetakia'
 ]
 
 def resolve_data_path(filename: str) -> str:
-    """Locates dataset file across predefined search paths."""
+    """Locates dataset file across predefined search paths, supporting .csv and .csv.gz."""
     for directory in DATA_DIR_SEARCH_PATHS:
         candidate = os.path.join(directory, filename)
         if os.path.exists(candidate):
             return candidate
+        if not candidate.endswith('.gz'):
+            candidate_gz = candidate + '.gz'
+            if os.path.exists(candidate_gz):
+                return candidate_gz
     raise FileNotFoundError(f"Dataset file '{filename}' not found in any search path: {DATA_DIR_SEARCH_PATHS}")
 
 def normalize_date_column(series: pd.Series) -> pd.Series:
