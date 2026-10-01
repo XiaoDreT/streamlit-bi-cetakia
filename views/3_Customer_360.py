@@ -226,23 +226,23 @@ else:
 st.markdown("---")
 
 # -------------------------------------------------------------
-# BAGIAN 3: PREFERENSI KATEGORI PRODUK & POTENSI KEBUTUHAN
+# BAGIAN 3: PREFERENSI KATEGORI PRODUK
 # -------------------------------------------------------------
 if lang_code == "EN":
     render_section_info(
-        title="2. Product Category Preferences & Unmet Need Opportunities",
-        subtitle="Analyzing core printing product categories and discovering high-potential complementary products.",
-        what_it_shows="Most frequent product categories, largest spend absorbing categories, basket mix, and complementary cross-sell recommendations.",
-        why_important="Enables sales teams to propose highly tailored complementary bundles relevant to customer business models rather than generic catalog spam.",
-        simple_insight="Identifying dominant purchase categories unlocks bundle cross-sell opportunities to increase average order basket size (AOV)."
+        title="2. Product Category Preferences & Spending Mix",
+        subtitle="Analyzing core printing product categories and customer demand distribution.",
+        what_it_shows="Most frequent product categories, largest spend absorbing categories, and order frequency breakdown.",
+        why_important="Helps sales and account managers understand customer core business requirements and where their printing budget is allocated.",
+        simple_insight="Knowing dominant purchase categories provides clear visibility into customer business specialization and operational focus."
     )
 else:
     render_section_info(
-        title="2. Preferensi Kategori Produk & Potensi Kebutuhan Pelanggan",
-        subtitle="Menganalisis jenis produk cetak yang menjadi andalan pelanggan dan peluang penawaran produk pelengkap.",
-        what_it_shows="Kategori produk yang paling sering dipesan, kategori yang menyerap dana terbesar, bauran preferensi, serta rekomendasi kategori pelengkap yang belum pernah dipesan.",
-        why_important="Membantu tim penjualan menawarkan produk komplementer (cross-sell) yang relevan dengan bisnis pelanggan, bukan menawarkan produk secara acak.",
-        simple_insight="Mengetahui kategori yang paling sering dibeli membuka peluang penawaran paket bundling untuk memperbesar ukuran keranjang belanja."
+        title="2. Preferensi Kategori Produk Pelanggan",
+        subtitle="Menganalisis jenis produk cetak yang menjadi andalan dan bauran belanja pelanggan.",
+        what_it_shows="Kategori produk yang paling sering dipesan, kategori yang menyerap dana terbesar, serta proporsi volume pesanan pelanggan.",
+        why_important="Membantu tim penjualan dan manajer akun memahami kebutuhan cetak utama pelanggan dan alokasi belanjanya.",
+        simple_insight="Mengetahui kategori yang paling sering dibeli memberikan gambaran jelas mengenai fokus bisnis dan kebutuhan utama pelanggan."
     )
 
 if not cust_items.empty:
@@ -292,78 +292,5 @@ if not cust_items.empty:
         fig_donut_cat.update_traces(textposition="inside", textinfo="percent+label")
         apply_plotly_theme(fig_donut_cat, height=340)
         st.plotly_chart(fig_donut_cat, use_container_width=True)
-        
-    # Identification of complementary opportunities (Potensi Kebutuhan)
-    bought_cats = set(cust_cat_summary["clean_cat"].tolist())
-    
-    complementary_opps = []
-    if any("Packaging" in c for c in bought_cats) and not any("Sticker" in c for c in bought_cats):
-        if lang_code == "EN":
-            complementary_opps.append({
-                "target": "Custom Roll / Die-cut Product Labels",
-                "alasan": "Customer already purchases Box Packaging but has not ordered branded labels/stickers.",
-                "ide_aksi": "Offer a 5% combo packaging + label bundle with roll sticker samples on next visit."
-            })
-        else:
-            complementary_opps.append({
-                "target": "Stiker Label Roll / Cutting",
-                "alasan": "Pelanggan sudah membeli Kemasan (Packaging) namun belum memesan Stiker Label untuk merek/kemasan.",
-                "ide_aksi": "Tawarkan paket bundling kemasan + label hemat 5% dengan membawa sampel stiker roll."
-            })
-    if any("Large Format" in c or "Banner" in c for c in bought_cats) and not any("Stand" in c or "Finishing" in c for c in bought_cats):
-        if lang_code == "EN":
-            complementary_opps.append({
-                "target": "Display Standee (X-Banner / Roll Up Display)",
-                "alasan": "Customer frequently orders promotional banners but has not ordered portable display hardware.",
-                "ide_aksi": "Pitch event-ready display kits including standee hardware and carrying case."
-            })
-        else:
-            complementary_opps.append({
-                "target": "Display Standee (X-Banner / Roll Up)",
-                "alasan": "Pelanggan sering memesan spanduk/banner promosi namun belum melengkapi dengan stand display portable.",
-                "ide_aksi": "Tawarkan paket display event siap pasang."
-            })
-    if any("A3" in c or "Brochure" in c or "Book" in c for c in bought_cats) and not any("Corporate ID" in c or "Stationery" in c for c in bought_cats):
-        if lang_code == "EN":
-            complementary_opps.append({
-                "target": "Business Cards & Corporate Identity Starter Kit",
-                "alasan": "Customer prints marketing collateral but has not ordered standard corporate stationery/identity.",
-                "ide_aksi": "Pitch matte-laminated corporate business card bundles for the client's sales team."
-            })
-        else:
-            complementary_opps.append({
-                "target": "Kartu Nama & Starter Branding Korporat",
-                "alasan": "Pelanggan mencetak dokumen pemasaran namun belum memesan identitas korporat standar.",
-                "ide_aksi": "Tawarkan bundling kartu nama matte finishing untuk kebutuhan tim representatif."
-            })
-        
-    if not complementary_opps:
-        if lang_code == "EN":
-            complementary_opps.append({
-                "target": "Promotional Souvenirs & Corporate Merchandise",
-                "alasan": "Customer demonstrates a solid repeat order history across primary printing categories.",
-                "ide_aksi": "Introduce Cetakia's custom corporate merchandise catalog for corporate year-end gifts or events."
-            })
-        else:
-            complementary_opps.append({
-                "target": "Souvenir & Merchandise Promosi (Tumbler/Tote Bag)",
-                "alasan": "Pelanggan telah memiliki riwayat repeat order yang solid pada kategori cetak utama.",
-                "ide_aksi": "Kenalkan katalog merchandise custom Cetakia untuk keperluan gift akhir tahun atau event perusahaan."
-            })
-        
-    lbl_rec_opp = "🎯 Rekomendasi Kebutuhan Pelengkap (Peluang Penjualan)" if lang_code == "ID" else "🎯 Recommended Complementary Opportunities (Cross-Sell)"
-    lbl_opp_prod = "Peluang Produk" if lang_code == "ID" else "Opportunity Product"
-    lbl_opp_why = "Analisis Perilaku" if lang_code == "ID" else "Behavioral Rationale"
-    lbl_opp_act = "Ide Tindakan Sales" if lang_code == "ID" else "Sales Action Idea"
-    
-    st.markdown(f"### {lbl_rec_opp}")
-    for opp in complementary_opps:
-        st.markdown(f"""
-        <div class="cetakia-card" style="border-left: 4px solid #10B981; padding: 14px 18px; margin-bottom: 10px;">
-            <div style="font-weight: 700; color: #10B981; font-size: 14px;">{lbl_opp_prod}: {opp['target']}</div>
-            <div style="font-size: 13px; margin: 4px 0; opacity: 0.9;"><b>{lbl_opp_why}:</b> {opp['alasan']}</div>
-            <div style="font-size: 13px; color: #3B82F6; font-weight: 600;"><b>{lbl_opp_act}:</b> {opp['ide_aksi']}</div>
-        </div>
-        """, unsafe_allow_html=True)
 else:
     st.info("Belum ada riwayat detail item produk yang dibeli untuk pelanggan ini." if lang_code == "ID" else "No detailed purchased item history available for this customer.")
