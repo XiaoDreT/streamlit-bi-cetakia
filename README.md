@@ -1,17 +1,16 @@
-# Cetakia BI — Business Intelligence Decision Support System (DSS V1.1)
+# Cetakia BI — Business Intelligence Decision Support System (DSS V1.2)
 
-**Version:** V1.1 (Stricter Business Decision Support System)  
+**Version:** V1.2 (Customer & User-Oriented Decision Support System)  
 **Repository:** `cetakia-bi` (`https://github.com/XiaoDreT/streamlit-bi-cetakia`)  
 **Target Platform:** Cipta Grafika Commercial Printing Platform  
-**Architecture Role:** Senior Business Intelligence Engineer & Data Product Engineer  
+**Architecture Role:** Senior BI Product Designer, BI Analyst & Streamlit Frontend Engineer  
+**Dokumentasi Lengkap Pembaruan:** [Laporan Implementasi Pembaruan V1.2](LAPORAN_IMPLEMENTASI_V1.2.md)
 
 ---
 
-## 1. Executive Summary: Evolution from V1.0 to V1.1
+## 1. Executive Summary: Evolution to V1.2
 
-The **Cetakia BI V1.0 Prototype** successfully proved the feasibility of building analytical dashboards from Cipta Grafika's master data extracts. However, evaluation revealed that V1.0 functioned primarily as an *"Insight Visualization Prototype"* — explaining historical data without enforcing strict operational decision pathways.
-
-**Cetakia BI V1.1** transforms the application into a **"Stricter Business Decision Support System (DSS)"**. Every visualization, metric card, and table is now engineered to guide operational teams (CS, Sales, Product Merchandising, Strategy, and Executive Leadership) on **exact actions to take, target accounts to contact, and expected SLA deadlines**.
+The **Cetakia BI V1.0 & V1.1** proved analytical feasibility and established the core Decision Support System (DSS) framework. In **Cetakia BI V1.2**, the application achieves full **Customer & User-Oriented maturity**: technical jargon (tiers, recency, lift) is translated into intuitive operational language, confusing visual elements (treemaps, bubble charts, scatter plots) are replaced with clear standard charts (horizontal bar, donut, performance matrix), and redundant raw data tables are eliminated in favor of high-impact behavioral insights and actionable campaigns.
 
 ### The 5-Part DSS Core Principle
 

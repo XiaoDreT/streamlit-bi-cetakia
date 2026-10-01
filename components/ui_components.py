@@ -105,10 +105,10 @@ TRANSLATIONS = {
         "rep_leaderboard": "🏆 Leaderboard Unconverted Salesperson",
         "urgent_worklist": "⚠️ Daftar Kerja Quotation Mendesak (Mendekati Expired <= 72 Jam)",
         "prod_intel_title": "Dashboard Intelijen Produk",
-        "prod_intel_sub": "Kontribusi Kategori, Matriks Penetrasi vs Revenue, Pasangan Co-Purchase & Bundle",
+        "prod_intel_sub": "Kontribusi Kategori, Matriks Kinerja & Sebaran Pembeli, Pasangan Co-Purchase & Paket Promosi",
         "cat_mix": "🧩 Mix Pendapatan & Volume Kategori",
         "top_prod_leaders": "🏆 10 Produk Pemimpin Pendapatan",
-        "opp_matrix": "🎯 Matriks Peluang Penetrasi Pelanggan vs Revenue",
+        "opp_matrix": "🎯 Matriks Kinerja & Sebaran Pembeli Produk",
         "copurchase_pairs": "🔗 Pasangan Produk Co-Purchase Direkomendasikan",
         "mkt_intel_title": "Dashboard Intelijen Pasar",
         "mkt_intel_sub": "Kontribusi Segmen Pasar, Benchmark Tangkapan Cabang Regional & Kerapatan Peluang",
@@ -162,10 +162,10 @@ TRANSLATIONS = {
         "rep_leaderboard": "🏆 Sales Rep Unconverted Value Leaderboard",
         "urgent_worklist": "⚠️ Urgent Quotation Action Worklist (Expiring within 72 Hours)",
         "prod_intel_title": "Product Intelligence Dashboard",
-        "prod_intel_sub": "Category Contribution, Revenue vs Penetration Matrix, Co-Purchase Affinity & Bundles",
+        "prod_intel_sub": "Category Contribution, Performance & Customer Reach Matrix, Co-Purchase Affinity & Promotional Packages",
         "cat_mix": "🧩 Category Revenue & Volume Mix",
         "top_prod_leaders": "🏆 Top 10 Product Revenue Leaders",
-        "opp_matrix": "🎯 Revenue vs. Customer Penetration Opportunity Matrix",
+        "opp_matrix": "🎯 Product Performance & Customer Reach Matrix",
         "copurchase_pairs": "🔗 Recommended Product Co-Purchase Pairs",
         "mkt_intel_title": "Market Intelligence Dashboard",
         "mkt_intel_sub": "Segment Contribution Share, Regional Branch Market Catchment & Opportunity Density",
@@ -445,6 +445,61 @@ def metric_card(title: str, value: str, delta: str = None, delta_color: str = "p
 {subtext_html}
 </div>"""
     st.markdown(card_html, unsafe_allow_html=True)
+
+def render_section_info(
+    title: str,
+    subtitle: str = None,
+    what_it_shows: str = None,
+    why_important: str = None,
+    simple_insight: str = None,
+    icon: str = "💡",
+    lang_code: str = None
+):
+    """Renders a user-friendly and business-oriented context box explaining:
+    - What is displayed (Apa yang ditampilkan)
+    - Why it is important (Mengapa ini penting)
+    - Business meaning & simple insight (Makna bisnis & insight)
+    """
+    lang = lang_code or st.session_state.get("lang_code", "ID")
+    if lang == "EN":
+        lbl_what = "📋 What is Displayed:"
+        lbl_why = "🎯 Why It Matters:"
+        lbl_insight = "💡 Simple Insight:"
+    else:
+        lbl_what = "📋 Yang Ditampilkan:"
+        lbl_why = "🎯 Mengapa Penting:"
+        lbl_insight = "💡 Insight Sederhana:"
+
+    what_block = f"""<div><span style="font-weight: 700; color: #3B82F6;">{lbl_what}</span><br><span style="opacity: 0.9;">{what_it_shows}</span></div>""" if what_it_shows else ""
+    why_block = f"""<div><span style="font-weight: 700; color: #F59E0B;">{lbl_why}</span><br><span style="opacity: 0.9;">{why_important}</span></div>""" if why_important else ""
+    insight_block = f"""<div><span style="font-weight: 700; color: #10B981;">{lbl_insight}</span><br><span style="opacity: 0.9;">{simple_insight}</span></div>""" if simple_insight else ""
+    sub_html = f'<div style="font-size: 13px; opacity: 0.85; margin-bottom: 10px;">{subtitle}</div>' if subtitle else ""
+
+    info_html = f"""<div style="background-color: var(--secondary-background-color, rgba(128,128,128,0.06)); border-left: 4px solid #3B82F6; border-radius: 8px; padding: 14px 18px; margin-bottom: 18px; border-top: 1px solid rgba(156,163,175,0.2); border-right: 1px solid rgba(156,163,175,0.2); border-bottom: 1px solid rgba(156,163,175,0.2);">
+<div style="font-weight: 700; font-size: 15px; color: #3B82F6; margin-bottom: 6px;">{icon} {title}</div>
+{sub_html}
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; font-size: 13px; line-height: 1.5;">
+{what_block}
+{why_block}
+{insight_block}
+</div>
+</div>"""
+    st.markdown(info_html, unsafe_allow_html=True)
+
+def render_summary_strip(items: list):
+    """Renders a sleek horizontal row of badge-like stat cards."""
+    cards_html = ""
+    for item in items:
+        label = item.get("label", "")
+        val = item.get("value", "")
+        desc = item.get("desc", "")
+        color = item.get("color", "#3B82F6")
+        cards_html += f"""<div style="background-color: var(--secondary-background-color, rgba(128,128,128,0.06)); border: 1px solid rgba(156,163,175,0.25); border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 160px;">
+<div style="font-size: 11px; font-weight: 700; color: {color}; text-transform: uppercase; letter-spacing: 0.5px;">{label}</div>
+<div style="font-size: 18px; font-weight: 800; margin: 3px 0; color: var(--text-color, inherit);">{val}</div>
+{f'<div style="font-size: 11.5px; opacity: 0.8;">{desc}</div>' if desc else ''}
+</div>"""
+    st.markdown(f'<div style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">{cards_html}</div>', unsafe_allow_html=True)
 
 def render_insight_card(title: str, metric: str, context: str, insight: str, action: str, badge: str = "DECISION RULE"):
     """Renders mandatory 4-part DSS insight card unindented."""
