@@ -127,9 +127,9 @@ Pembaruan **Cetakia BI V1.2** difokuskan untuk mentransformasi dashboard yang se
 - Kolom rekomendasi tindakan teknis pada Worklist CS.
 - Section ringkasan metadata akun mentah, next best action engine, dan tabel transaksi invoice pada Customer 360.
 - Tab Eksplorasi Data Quotation (Sales Intelligence).
-- Tab List Target Cross-Sell teknis (Product Intelligence).
 - Kolom "Klasifikasi Kinerja" pada tabel kinerja produk (Product Intelligence) karena tidak valid dan membingungkan user.
 - Klaim angka marketing palsu (AOV naik 15-25%, diskon statis Rp 50.000, diskon 7%, dsb.) pada Product Intelligence.
+- Bagian "Rekomendasi Kebutuhan Pelengkap" pada Customer 360, menyerahkan keputusan aksi sepenuhnya kepada user yang memahami perilaku dan kebutuhan spesifik pelanggan.
 
 ---
 
