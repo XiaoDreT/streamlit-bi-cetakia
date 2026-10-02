@@ -1,0 +1,8 @@
+aging_bucket,invoice_count,customer_count,outstanding_amount
+Settled,35319,10967,5.0
+Not Yet Due,357,133,689777958.47
+Due Today,70,54,46376355.0
+1-30 Days,2915,570,2084528672.32
+31-60 Days,2933,516,1642832328.02
+61-90 Days,3148,559,1455258378.68
+90+ Days,14657,1496,7187952167.34

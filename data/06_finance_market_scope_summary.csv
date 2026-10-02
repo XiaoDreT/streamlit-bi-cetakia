@@ -1,0 +1,3 @@
+market_scope,invoice_count,customer_count,billed_amount,settled_amount,outstanding_amount,overdue_outstanding,collection_rate_pct
+External Customer,44058,12307,17177469944.93,7528012078.83,9649457866.1,8971245432.63,43.82491777289893
+Internal Division,15341,34,3832162933.73,374894935.0,3457267998.73,3399326113.73,9.782854786790068
