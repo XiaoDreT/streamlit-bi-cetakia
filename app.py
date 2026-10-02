@@ -16,6 +16,7 @@ pages = [
     st.Page("views/4_Sales_Intelligence.py", title="Sales Intelligence", icon="🎯", url_path="Sales_Intelligence"),
     st.Page("views/5_Product_Intelligence.py", title="Product Intelligence", icon="📦", url_path="Product_Intelligence"),
     st.Page("views/6_Market_Intelligence.py", title="Market Intelligence", icon="🌐", url_path="Market_Intelligence"),
+    st.Page("views/7_Finance_Intelligence.py", title="Finance Intelligence", icon="💳", url_path="Finance_Intelligence"),
 ]
 
 pg = st.navigation(pages)

@@ -114,7 +114,9 @@ TRANSLATIONS = {
         "mkt_intel_sub": "Kontribusi Segmen Pasar, Benchmark Tangkapan Cabang Regional & Kerapatan Peluang",
         "mkt_matrix": "🌐 Matriks Kerapatan Segmen Pasar",
         "branch_benchmark": "🏢 Benchmark Tangkapan Pasar Cabang Regional",
-        "strat_guidance": "📌 Panduan Strategi & Interpretasi Bisnis"
+        "strat_guidance": "📌 Panduan Strategi & Interpretasi Bisnis",
+        "fin_intel_title": "Dashboard Intelijen Keuangan",
+        "fin_intel_sub": "Realisasi Kas Masuk, Pemantauan Umur Piutang (Aging), Perilaku Pembayaran Pelanggan & Prioritas Penagihan"
     },
     "EN": {
         "app_title": "Cetakia BI — Decision Support System",
@@ -171,7 +173,9 @@ TRANSLATIONS = {
         "mkt_intel_sub": "Segment Contribution Share, Regional Branch Market Catchment & Opportunity Density",
         "mkt_matrix": "🌐 Market Opportunity Matrix (Segment Density)",
         "branch_benchmark": "🏢 Regional Branch Market Catchment Benchmarking",
-        "strat_guidance": "📌 Strategic Business Interpretation"
+        "strat_guidance": "📌 Strategic Business Interpretation",
+        "fin_intel_title": "Finance Intelligence Dashboard",
+        "fin_intel_sub": "Cash Conversion, Aging Receivable Monitoring, Customer Payment Behavior & Collection Priority"
     }
 }
 

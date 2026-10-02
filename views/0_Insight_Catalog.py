@@ -46,12 +46,14 @@ if lang_code == "ID":
     target_sales_mgr = "Sasaran: Manajer Penjualan & Tim Komersial"
     target_mkt_prod = "Sasaran: Product Manager, Merchandising & Marketing"
     target_owner_strat = "Sasaran: Owner, Direktur Strategi & Ekspansi Bisnis"
+    target_fin_mgr = "Sasaran: Finance Manager, Tim Penagihan & Manajemen Arus Kas"
     exec_desc = "Kesehatan makro bisnis, pendapatan bersih riil, tren & trajektori bulanan (peak/low season), bauran segmen pelanggan (bar ranking), tolak ukur 6 cabang dengan laju pertumbuhan, dan mitigasi konsentrasi top customer."
     cust_intel_desc = "Segmentasi 8 perilaku pelanggan (Champion, At Risk, Regular, dsb.), klasifikasi nilai belanja (Sangat Tinggi s/d Rendah tanpa istilah Tier), worklist prioritas kontak CS terarah, dan status keaktifan RFM."
     cust_360_desc = "Profil akun tunggal berfokus perilaku: pola & frekuensi belanja, timeline tren aktivitas bulanan, serta preferensi bauran kategori produk andalan pelanggan."
     sales_intel_desc = "Funnel konversi penawaran multi-tahap dengan 5 metrik eksplisit (terbit, won, drop, titik drop terbesar, conversion rate), 5 status peluang (aktif, berlanjut, selesai, ditolak, expired), dan leaderboard sales rep."
     prod_intel_desc = "Bauran penjualan kategori (horizontal bar), peringkat 10 produk terlaris, tabel kinerja produk, analisis kombinasi pembelian bersama (co-purchase), dan 4 panduan portofolio katalog."
     mkt_intel_desc = "Matriks peluang segmen pasar & tolok ukur 6 cabang, SupportUMKM Intelligence (pola belanja & kebutuhan UMKM), serta Marketing Campaign Intelligence (peluang voucher, referral, momentum musiman, retargeting perilaku belanja)."
+    fin_intel_desc = "Realisasi kas nyata (penyelesaian tagihan), pemantauan umur piutang (aging buckets), mitigasi risiko piutang segmen Industri & akun internal divisi, pola ketepatan waktu pembayaran, worklist prioritas penagihan akun berisiko tinggi, serta audit kualitas data keuangan."
     info_nav = "👈 **Gunakan menu navigasi sidebar di sebelah kiri untuk membuka modul dashboard Cetakia BI DSS V1.2.**"
 else:
     philosophy_title = "🚀 Business Decision Support Philosophy"
@@ -74,12 +76,14 @@ else:
     target_sales_mgr = "Target: Sales Manager, Commercial Operations"
     target_mkt_prod = "Target: Product Manager, Merchandising & Marketing"
     target_owner_strat = "Target: Owner, Strategy & Business Dev"
+    target_fin_mgr = "Target: Finance Manager, Collection Team & Cash Flow Management"
     exec_desc = "Macro enterprise health, net revenue trends, peak/low season trajectory, customer segment rankings, 6 regional branch benchmarks with growth rates, and top customer concentration."
     cust_intel_desc = "8-segment customer behavioral mapping (Champion, At Risk, Regular, etc.), friendly customer value tiers, prioritized CS contact worklist, and RFM loyalty composition."
     cust_360_desc = "Single-account behavioral profile: purchase patterns, order frequency, monthly spend timeline, and core product category mix preferences."
     sales_intel_desc = "Quotation conversion funnel with 5 explicit metrics, 5 clear opportunity stages, sales rep win-rate rankings, and urgent 72-hour expiring quotation worklist."
     prod_intel_desc = "Category revenue mix (horizontal bar), top 10 products, performance table, factual co-purchase invoice pairs, and 4 strategic catalog merchandising guidelines."
     mkt_intel_desc = "Segment market opportunity & 6-branch benchmarks, SupportUMKM Intelligence (MSME purchasing behavior & needs), and Marketing Campaign Intelligence (voucher, referral, seasonal momentum, and behavioral retargeting)."
+    fin_intel_desc = "Cash conversion realization, aging receivable buckets, Industri segment & internal division receivable risk mitigation, payment timeliness, high-risk collection priority worklist, and financial data quality audit."
     info_nav = "👈 **Select any module from the sidebar navigation menu to launch the Cetakia DSS V1.2 dashboard.**"
 
 # System Philosophy Banner
@@ -172,6 +176,17 @@ with col3:
         <p style="color: #3B82F6; font-weight: 600; font-size: 13px;">{target_owner_strat}</p>
     </div>
     """, unsafe_allow_html=True)
+
+st.markdown(f"""
+<div class="cetakia-metric-card" style="border: 2px solid #3B82F6; background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(37, 99, 235, 0.15) 100%);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <h4 style="color: #3B82F6; margin: 0;">💳 {t['fin_intel_title']}</h4>
+        <span style="background-color: #3B82F6; color: white; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 12px;">MODUL BARU V1.2+</span>
+    </div>
+    <p style="font-size: 13.5px; line-height: 1.5;">{fin_intel_desc}</p>
+    <p style="color: #3B82F6; font-weight: 600; font-size: 13px; margin: 0;">{target_fin_mgr}</p>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown("---")
 st.info(info_nav)

@@ -7,10 +7,12 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DATA_DIR_SEARCH_PATHS = [
     os.path.join(BASE_DIR, 'data'),
     os.path.join(BASE_DIR, 'docs'),
+    os.path.join(BASE_DIR, 'docs', 'EDA Dataset Summary'),
     '/home/zen/Documents/Cetakia/Master Data Cetakia',
     os.path.join(BASE_DIR, '..', 'Master Data Cetakia'),
     './data',
     './docs',
+    './docs/EDA Dataset Summary',
     '../Master Data Cetakia',
     './Master Data Cetakia'
 ]
@@ -128,3 +130,91 @@ def load_quotation_data() -> pd.DataFrame:
         if date_col in df.columns:
             df[date_col] = normalize_date_column(df[date_col])
     return df
+
+@st.cache_data(show_spinner=False)
+def load_finance_data(include_internal: bool = True) -> pd.DataFrame:
+    """Loads 06_collection_payment_analysis.csv with normalized datetime and numeric types.
+    Optionally filters out internal division transactions if include_internal=False.
+    """
+    path = resolve_data_path('06_collection_payment_analysis.csv')
+    df = pd.read_csv(path, low_memory=False)
+    for date_col in ['invoice_date', 'due_date', 'first_payment_date', 'last_payment_date']:
+        if date_col in df.columns:
+            df[date_col] = normalize_date_column(df[date_col])
+    
+    # Ensure numeric columns are properly typed
+    numeric_cols = [
+        'invoice_sub_total', 'invoice_discount_amount', 'invoice_tax_amount', 'invoice_amount',
+        'invoice_amount_clean', 'paid_raw_clean', 'settled_amount_eda', 'outstanding_eda',
+        'overdue_outstanding_eda', 'days_overdue_current', 'collection_rate_pct_receipt_basis'
+    ]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+            
+    if not include_internal and 'market_scope' in df.columns:
+        df = df[df['market_scope'] != 'Internal Division']
+    return df
+
+@st.cache_data(show_spinner=False)
+def load_customer_payment_behavior() -> pd.DataFrame:
+    """Loads 06_customer_payment_behavior_summary_readable.csv."""
+    path = resolve_data_path('06_customer_payment_behavior_summary_readable.csv')
+    df = pd.read_csv(path, low_memory=False)
+    numeric_cols = [
+        'total_invoices', 'billed_amount', 'settled_amount', 'paid_raw_amount',
+        'outstanding_amount', 'overdue_outstanding', 'overdue_invoice_count',
+        'fully_paid_invoices', 'late_paid_invoices', 'max_days_overdue',
+        'collection_rate_pct', 'overdue_ratio_pct'
+    ]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+    return df
+
+@st.cache_data(show_spinner=False)
+def load_collection_data_quality_exceptions() -> pd.DataFrame:
+    """Loads 06_collection_data_quality_exceptions.csv."""
+    path = resolve_data_path('06_collection_data_quality_exceptions.csv')
+    df = pd.read_csv(path, low_memory=False)
+    for date_col in ['invoice_date', 'due_date', 'first_payment_date', 'last_payment_date']:
+        if date_col in df.columns:
+            df[date_col] = normalize_date_column(df[date_col])
+    return df
+
+@st.cache_data(show_spinner=False)
+def load_aging_receivable_summary() -> pd.DataFrame:
+    """Loads 06_aging_receivable_summary.csv."""
+    path = resolve_data_path('06_aging_receivable_summary.csv')
+    return pd.read_csv(path)
+
+@st.cache_data(show_spinner=False)
+def load_finance_market_scope_summary() -> pd.DataFrame:
+    """Loads 06_finance_market_scope_summary.csv."""
+    path = resolve_data_path('06_finance_market_scope_summary.csv')
+    return pd.read_csv(path)
+
+@st.cache_data(show_spinner=False)
+def load_finance_segment_summary() -> pd.DataFrame:
+    """Loads 06_finance_segment_summary.csv."""
+    path = resolve_data_path('06_finance_segment_summary.csv')
+    return pd.read_csv(path)
+
+@st.cache_data(show_spinner=False)
+def load_finance_division_summary() -> pd.DataFrame:
+    """Loads 06_finance_division_summary.csv."""
+    path = resolve_data_path('06_finance_division_summary.csv')
+    return pd.read_csv(path)
+
+@st.cache_data(show_spinner=False)
+def load_payment_method_summary() -> pd.DataFrame:
+    """Loads 06_payment_method_frequency_summary.csv."""
+    path = resolve_data_path('06_payment_method_frequency_summary.csv')
+    return pd.read_csv(path)
+
+@st.cache_data(show_spinner=False)
+def load_finance_cohort_summary() -> pd.DataFrame:
+    """Loads 06_invoice_cohort_collection_summary.csv."""
+    path = resolve_data_path('06_invoice_cohort_collection_summary.csv')
+    return pd.read_csv(path)
+
