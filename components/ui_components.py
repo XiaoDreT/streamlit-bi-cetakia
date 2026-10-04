@@ -758,7 +758,7 @@ def global_sidebar_filters(df_sales=None, df_customers=None):
     
     # Date Range Filter (Persistent across navigation, resets on browser refresh)
     min_date = datetime(2025, 10, 1).date()
-    max_date = datetime(2026, 9, 19).date()
+    max_date = datetime(2026, 10, 3).date()
     default_date_range = (min_date, max_date)
     
     saved_date_range = st.session_state.get("global_date_range_val", default_date_range)
@@ -779,7 +779,7 @@ def global_sidebar_filters(df_sales=None, df_customers=None):
         date_range = saved_date_range
     
     st.sidebar.markdown("---")
-    cutoff_date_str = "September 19, 2026" if lang_code == "EN" else "19 September 2026"
+    cutoff_date_str = "October 3, 2026" if lang_code == "EN" else "3 Oktober 2026"
     data_mode_str = "Master Analytical Data" if lang_code == "EN" else "Master Data Analitis"
     st.sidebar.caption(f"📌 **{t['snapshot_cutoff']}:** {cutoff_date_str}")
     st.sidebar.caption(f"⚡ **{t['data_mode']}:** {data_mode_str}")

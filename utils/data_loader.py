@@ -31,7 +31,7 @@ def resolve_data_path(filename: str) -> str:
 
 def normalize_date_column(series: pd.Series) -> pd.Series:
     """Parses datetime strings and strips timezones to prevent comparison errors."""
-    dt_series = pd.to_datetime(series, errors='coerce')
+    dt_series = pd.to_datetime(series, format='mixed', errors='coerce')
     if hasattr(dt_series.dt, 'tz') and dt_series.dt.tz is not None:
         dt_series = dt_series.dt.tz_localize(None)
     return dt_series
