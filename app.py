@@ -11,6 +11,7 @@ st.set_page_config(
 pages = [
     st.Page("views/0_Insight_Catalog.py", title="Insight Catalog", icon="📊", url_path="Insight_Catalog", default=True),
     st.Page("views/1_Executive_Dashboard.py", title="Executive Dashboard", icon="📈", url_path="Executive_Dashboard"),
+    st.Page("views/8_New_Customer.py", title="New Customer", icon="🌱", url_path="New_Customer"),
     st.Page("views/2_Customer_Intelligence.py", title="Customer Intelligence", icon="👥", url_path="Customer_Intelligence"),
     st.Page("views/3_Customer_360.py", title="Customer 360", icon="👤", url_path="Customer_360"),
     st.Page("views/4_Sales_Intelligence.py", title="Sales Intelligence", icon="🎯", url_path="Sales_Intelligence"),

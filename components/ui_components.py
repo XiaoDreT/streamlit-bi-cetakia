@@ -116,7 +116,9 @@ TRANSLATIONS = {
         "branch_benchmark": "🏢 Benchmark Tangkapan Pasar Cabang Regional",
         "strat_guidance": "📌 Panduan Strategi & Interpretasi Bisnis",
         "fin_intel_title": "Dashboard Intelijen Keuangan",
-        "fin_intel_sub": "Realisasi Kas Masuk, Pemantauan Umur Piutang (Aging), Perilaku Pembayaran Pelanggan & Prioritas Penagihan"
+        "fin_intel_sub": "Realisasi Kas Masuk, Pemantauan Umur Piutang (Aging), Perilaku Pembayaran Pelanggan & Prioritas Penagihan",
+        "new_cust_title": "Dashboard New Customer",
+        "new_cust_sub": "Pantau pertumbuhan customer baru berdasarkan periode, kategori customer, dan division."
     },
     "EN": {
         "app_title": "Cetakia BI — Decision Support System",
@@ -175,7 +177,9 @@ TRANSLATIONS = {
         "branch_benchmark": "🏢 Regional Branch Market Catchment Benchmarking",
         "strat_guidance": "📌 Strategic Business Interpretation",
         "fin_intel_title": "Finance Intelligence Dashboard",
-        "fin_intel_sub": "Cash Conversion, Aging Receivable Monitoring, Customer Payment Behavior & Collection Priority"
+        "fin_intel_sub": "Cash Conversion, Aging Receivable Monitoring, Customer Payment Behavior & Collection Priority",
+        "new_cust_title": "New Customer Dashboard",
+        "new_cust_sub": "Monitor new customer growth by period, customer category, and division."
     }
 }
 
@@ -294,6 +298,23 @@ html[data-theme="light"] .cetakia-logo-dark,
 .cetakia-metric-card:hover {{
     border-color: #3B82F6;
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+    transform: translateY(-2px);
+}}
+
+/* Cetakia Native Stat Card (Matching Cetakia Dashboard & API) */
+.cetakia-stat-card {{
+    background-color: #111827;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #F8FAFC;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}}
+.cetakia-stat-card:hover {{
+    border-color: rgba(59, 130, 246, 0.4);
     transform: translateY(-2px);
 }}
 .metric-title {{
@@ -447,6 +468,93 @@ def metric_card(title: str, value: str, delta: str = None, delta_color: str = "p
 <div class="metric-value">{value}</div>
 {delta_html}
 {subtext_html}
+</div>"""
+    st.markdown(card_html, unsafe_allow_html=True)
+
+def render_cetakia_hero_card(
+    title: str = "NEW CUSTOMERS (3 DAYS)",
+    new_accounts: int = 80,
+    growth_pct: float = -15.8,
+    prev_accounts: int = 95,
+    prev_label: str = "prev 3 days",
+    last_30_days: int = 816,
+    total_customers: int = 24742,
+    icon_type: str = "user-plus",
+    highlight_color: str = "#10B981",
+    unit_label: str = "new accounts",
+    last_30_prefix: str = "Last 30 Days:",
+    total_prefix: str = "Total:"
+):
+    """Renders the authentic Cetakia New Customer acquisition card widget matching the Cetakia API / UI screenshot."""
+    inject_custom_css()
+    
+    val_sign = f"+{new_accounts:,}" if new_accounts >= 0 else f"{new_accounts:,}"
+    
+    # Growth delta formatting
+    if prev_accounts == 0 and new_accounts > 0:
+        growth_text = "NEW"
+        delta_color = "#10B981"
+        arrow_icon = "↗"
+    elif growth_pct is not None and growth_pct < 0:
+        growth_text = f"{growth_pct:.1f}%"
+        delta_color = "#F87171"
+        arrow_icon = "↘"
+    elif growth_pct is not None and growth_pct > 0:
+        growth_text = f"+{growth_pct:.1f}%"
+        delta_color = "#10B981"
+        arrow_icon = "↗"
+    else:
+        growth_text = "0.0%"
+        delta_color = "#94A3B8"
+        arrow_icon = "→"
+        
+    last_30_str = f"+{last_30_days:,}" if last_30_days >= 0 else f"{last_30_days:,}"
+    
+    card_html = f"""<div class="cetakia-stat-card">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+    <span style="color: #94A3B8; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;">
+        {title}
+    </span>
+    <div style="background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; color: {highlight_color};">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="8.5" cy="7" r="4"></circle>
+            <line x1="20" y1="8" x2="20" y2="14"></line>
+            <line x1="23" y1="11" x2="17" y2="11"></line>
+        </svg>
+    </div>
+</div>
+<div style="display: flex; align-items: baseline; margin-bottom: 4px;">
+    <span style="color: #FFFFFF; font-size: 32px; font-weight: 800; font-family: Inter, sans-serif; letter-spacing: -0.5px;">
+        {val_sign}
+    </span>
+    <span style="color: #94A3B8; font-size: 14.5px; font-weight: 500; margin-left: 8px;">
+        {unit_label}
+    </span>
+</div>
+<div style="font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 14px;">
+    <span style="color: {delta_color}; font-weight: 700;">
+        {arrow_icon} {growth_text}
+    </span>
+    <span style="color: #94A3B8; font-weight: 500;">
+        vs {prev_label} ({prev_accounts:,})
+    </span>
+</div>
+<div style="border-top: 1px solid rgba(148, 163, 184, 0.15); margin: 14px 0 10px 0;"></div>
+<div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+    <div style="color: #94A3B8; display: flex; align-items: center; gap: 6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        <span>{last_30_prefix} <b style="color: #F1F5F9; font-weight: 700;">{last_30_str}</b></span>
+    </div>
+    <div style="color: #94A3B8;">
+        {total_prefix} <b style="color: #F1F5F9; font-weight: 700;">{total_customers:,}</b>
+    </div>
+</div>
 </div>"""
     st.markdown(card_html, unsafe_allow_html=True)
 
@@ -757,9 +865,9 @@ def global_sidebar_filters(df_sales=None, df_customers=None):
     st.session_state["global_segment_norm"] = norm_segment
     
     # Date Range Filter (Persistent across navigation, resets on browser refresh)
-    min_date = datetime(2025, 10, 1).date()
-    max_date = datetime(2026, 10, 3).date()
-    default_date_range = (min_date, max_date)
+    min_date = datetime(2025, 1, 1).date()
+    max_date = max(datetime(2026, 12, 31).date(), datetime.now().date())
+    default_date_range = (datetime(2025, 10, 1).date(), max_date)
     
     saved_date_range = st.session_state.get("global_date_range_val", default_date_range)
     if not (isinstance(saved_date_range, (tuple, list)) and len(saved_date_range) == 2):

@@ -218,3 +218,84 @@ def load_finance_cohort_summary() -> pd.DataFrame:
     path = resolve_data_path('06_invoice_cohort_collection_summary.csv')
     return pd.read_csv(path)
 
+@st.cache_data(show_spinner=False)
+def load_new_customer_master() -> pd.DataFrame:
+    """Loads and standardizes master customer dataset for New Customer Dashboard.
+    Prioritizes data/new_customer_eda.csv (Cetakia production extract).
+    Falls back to 01_customer_master_raw.csv if not found.
+    Applies Cetakia Business Rule: new_customer_valid_date = registration_date + 2 days.
+    """
+    try:
+        path = resolve_data_path('new_customer_eda.csv')
+    except Exception:
+        path = resolve_data_path('01_customer_master_raw.csv')
+
+    df = pd.read_csv(path)
+
+    # Normalize datetime columns
+    if 'created_at_jakarta' in df.columns:
+        df['customer_created_at'] = normalize_date_column(df['created_at_jakarta'])
+    elif 'customer_created_at' in df.columns:
+        df['customer_created_at'] = normalize_date_column(df['customer_created_at'])
+    elif 'created_at' in df.columns:
+        df['customer_created_at'] = normalize_date_column(df['created_at'])
+
+    if 'customer_updated_at' in df.columns:
+        df['customer_updated_at'] = normalize_date_column(df['customer_updated_at'])
+
+    # Cetakia Business Rule: Valid date = registration_date + 2 days
+    if 'registration_date' in df.columns and 'new_customer_valid_date' in df.columns:
+        df['registration_date'] = pd.to_datetime(df['registration_date']).dt.date
+        df['new_customer_valid_date'] = pd.to_datetime(df['new_customer_valid_date']).dt.date
+    else:
+        reg_dt = df['customer_created_at'].dt.date
+        valid_dt = reg_dt + pd.Timedelta(days=2)
+        df['registration_date'] = reg_dt
+        df['new_customer_valid_date'] = valid_dt
+
+    reg_dt = df['registration_date']
+    df['created_at'] = df['customer_created_at']
+    df['created_at_jakarta'] = df['customer_created_at']
+
+    # Calendar hierarchy
+    df['registration_year'] = pd.to_datetime(reg_dt).dt.year
+    df['registration_month_number'] = pd.to_datetime(reg_dt).dt.month
+    df['registration_year_month'] = pd.to_datetime(reg_dt).dt.strftime('%Y-%m')
+    df['registration_month_start'] = pd.to_datetime(reg_dt).dt.to_period('M').dt.to_timestamp().dt.date
+    df['registration_week_start'] = (pd.to_datetime(reg_dt) - pd.to_timedelta(pd.to_datetime(reg_dt).dt.weekday, unit='D')).dt.date
+
+    # Category standardization
+    if 'category_name' in df.columns:
+        df['category_name'] = df['category_name'].fillna('Uncategorized').astype(str).str.strip().str.upper()
+    elif 'customer_category' in df.columns:
+        df['category_name'] = df['customer_category'].fillna('Uncategorized').astype(str).str.strip().str.upper()
+    else:
+        df['category_name'] = 'UNCATEGORIZED'
+
+    if 'category_code' in df.columns:
+        df['category_code'] = df['category_code'].fillna('UNCAT').astype(str).str.strip().str.upper()
+    else:
+        df['category_code'] = df['category_name']
+
+    # Division standardization
+    df['division_name'] = df['division_name'].fillna('Unknown Division').astype(str).str.strip()
+    df['division_code'] = df['division_code'].fillna('UNK').astype(str).str.strip().str.upper() if 'division_code' in df.columns else 'UNK'
+    df['division_id'] = df['division_id'].astype(str) if 'division_id' in df.columns else '0'
+    df['customer_category_id'] = df['category_code'] + '_' + df['division_code']
+
+    # Status & Flags
+    df['prospect'] = df['prospect'].fillna(False).astype(bool) if 'prospect' in df.columns else False
+    df['inactive'] = df['inactive'].fillna(False).astype(bool) if 'inactive' in df.columns else False
+    if 'is_deleted_customer' in df.columns:
+        df['is_deleted_customer'] = df['is_deleted_customer'].fillna(False).astype(bool)
+    else:
+        df['is_deleted_customer'] = False
+
+    if 'customer_deleted_at' not in df.columns:
+        df['customer_deleted_at'] = None
+    df['company_id'] = df['company_id'].fillna('CG-001') if 'company_id' in df.columns else 'CG-001'
+    df['data_quality_status'] = 'Valid'
+    df['category_division_match'] = True
+
+    return df
+

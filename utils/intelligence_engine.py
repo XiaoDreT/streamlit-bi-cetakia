@@ -1,3 +1,4 @@
+import datetime
 import pandas as pd
 import numpy as np
 from typing import Union, Dict, Any, List
@@ -839,5 +840,558 @@ def compute_marketing_campaign_intelligence(
             "seasonal": len(target_seasonal_ids),
             "retarget": len(target_retarget_ids)
         }
+    }
+
+
+# -------------------------------------------------------------
+# NEW CUSTOMER GROWTH INTELLIGENCE ENGINE (BUSINESS-DRIVEN)
+# -------------------------------------------------------------
+def get_growth_status(net_change: int, growth_pct: float, prev_count: int, curr_count: int) -> tuple:
+    """
+    Returns (status_label, hex_color):
+    - NEW: Previous = 0 and Current > 0
+    - NO ACTIVITY: Previous = 0 and Current = 0
+    - SHARP DECLINE: Growth <= -30% or Current = 0 with Prev > 0
+    - DECLINING: Growth < -10% and > -30%
+    - STABLE: -10% <= Growth <= +10%
+    - GROWING: Growth > +10%
+    """
+    if prev_count == 0 and curr_count > 0:
+        return "NEW", "#10B981"
+    if prev_count == 0 and curr_count == 0:
+        return "NO ACTIVITY", "#9CA3AF"
+    if curr_count == 0 and prev_count > 0:
+        return "SHARP DECLINE", "#EF4444"
+    if growth_pct is None:
+        return "NEW", "#10B981"
+    if growth_pct > 10.0:
+        return "GROWING", "#10B981"
+    elif -10.0 <= growth_pct <= 10.0:
+        return "STABLE", "#6B7280"
+    elif -30.0 < growth_pct < -10.0:
+        return "DECLINING", "#F59E0B"
+    else:
+        return "SHARP DECLINE", "#EF4444"
+
+def compute_new_customer_kpis(
+    df: pd.DataFrame,
+    start_date,
+    end_date,
+    division: str = "All Branches",
+    category: str = "All Segments"
+) -> dict:
+    """Computes all New Customer KPIs comparing Current Period vs Previous Comparable Period of identical length."""
+    if df.empty:
+        return {
+            "curr_count": 0, "prev_count": 0, "net_growth": 0, "growth_pct": 0.0,
+            "growth_display": "0.0%", "delta_color": "neutral", "status": "NO ACTIVITY",
+            "top_category": "-", "top_category_count": 0, "top_category_pct": 0.0,
+            "period_days": 0, "prev_start_date": None, "prev_end_date": None,
+            "df_curr": df, "df_prev": df
+        }
+
+    # Filter by Division & Category
+    df_filtered = df.copy()
+    if division and division not in ["All Branches", "Semua Cabang"]:
+        df_filtered = df_filtered[df_filtered["division_name"] == division]
+    if category and category not in ["All Segments", "Semua Segmen"]:
+        df_filtered = df_filtered[df_filtered["category_name"] == category.upper()]
+
+    # Convert start_date and end_date to datetime.date if needed
+    if isinstance(start_date, (pd.Timestamp, str)):
+        start_date = pd.to_datetime(start_date).date()
+    if isinstance(end_date, (pd.Timestamp, str)):
+        end_date = pd.to_datetime(end_date).date()
+
+    # Calculate equal-duration comparison period
+    period_days = (end_date - start_date).days + 1
+    prev_end_date = start_date - pd.Timedelta(days=1)
+    prev_start_date = prev_end_date - pd.Timedelta(days=period_days - 1)
+
+    # Filter data based on new_customer_valid_date
+    df_curr = df_filtered[(df_filtered["new_customer_valid_date"] >= start_date) & (df_filtered["new_customer_valid_date"] <= end_date)]
+    df_prev = df_filtered[(df_filtered["new_customer_valid_date"] >= prev_start_date) & (df_filtered["new_customer_valid_date"] <= prev_end_date)]
+
+    curr_count = int(df_curr["customer_id"].nunique())
+    prev_count = int(df_prev["customer_id"].nunique())
+    net_growth = curr_count - prev_count
+
+    # Growth percentage calculation with edge cases
+    if prev_count > 0:
+        growth_pct = round(((curr_count - prev_count) / prev_count) * 100.0, 1)
+        growth_display = f"{growth_pct:+.1f}%"
+        status, _ = get_growth_status(net_growth, growth_pct, prev_count, curr_count)
+    elif curr_count > 0:
+        growth_pct = None
+        growth_display = "NEW"
+        status = "NEW"
+    else:
+        growth_pct = 0.0
+        growth_display = "-"
+        status = "NO ACTIVITY"
+
+    # Delta color
+    if net_growth > 0:
+        delta_color = "positive"
+    elif net_growth < 0:
+        delta_color = "negative"
+    else:
+        delta_color = "neutral"
+
+    # Top Category
+    if curr_count > 0 and not df_curr.empty:
+        top_cat_series = df_curr.groupby("category_name")["customer_id"].nunique().sort_values(ascending=False)
+        top_category = top_cat_series.index[0]
+        top_category_count = int(top_cat_series.iloc[0])
+        top_category_pct = round((top_category_count / curr_count) * 100.0, 1)
+    else:
+        top_category = "-"
+        top_category_count = 0
+        top_category_pct = 0.0
+
+    return {
+        "curr_count": curr_count,
+        "prev_count": prev_count,
+        "net_growth": net_growth,
+        "growth_pct": growth_pct,
+        "growth_display": growth_display,
+        "delta_color": delta_color,
+        "status": status,
+        "top_category": top_category,
+        "top_category_count": top_category_count,
+        "top_category_pct": top_category_pct,
+        "period_days": period_days,
+        "prev_start_date": prev_start_date,
+        "prev_end_date": prev_end_date,
+        "df_curr": df_curr,
+        "df_prev": df_prev
+    }
+
+def compute_new_customer_trend(df_curr: pd.DataFrame, df_prev: pd.DataFrame, start_date, end_date) -> tuple:
+    """Computes daily, weekly, or monthly time series trend for Line Chart."""
+    if isinstance(start_date, (pd.Timestamp, str)):
+        start_date = pd.to_datetime(start_date).date()
+    if isinstance(end_date, (pd.Timestamp, str)):
+        end_date = pd.to_datetime(end_date).date()
+
+    period_days = (end_date - start_date).days + 1
+    if period_days <= 31:
+        granularity = "Daily"
+    elif period_days <= 90:
+        granularity = "Weekly"
+    else:
+        granularity = "Monthly"
+
+    if df_curr.empty:
+        return pd.DataFrame(columns=["date_label", "new_customers", "period"]), granularity
+
+    df_c = df_curr.copy()
+    if granularity == "Daily":
+        df_c["_group"] = pd.to_datetime(df_c["new_customer_valid_date"])
+        df_c["date_label"] = df_c["_group"].dt.strftime("%d %b")
+    elif granularity == "Weekly":
+        df_c["_group"] = pd.to_datetime(df_c["registration_week_start"])
+        df_c["date_label"] = "W-" + df_c["_group"].dt.strftime("%U (%d %b)")
+    else:
+        df_c["_group"] = pd.to_datetime(df_c["registration_month_start"])
+        df_c["date_label"] = df_c["_group"].dt.strftime("%b %Y")
+
+    trend_curr = df_c.groupby(["_group", "date_label"])["customer_id"].nunique().reset_index()
+    trend_curr = trend_curr.sort_values(by="_group")
+    trend_curr = trend_curr.rename(columns={"customer_id": "new_customers"})
+    trend_curr["period"] = "Periode Terpilih"
+
+    return trend_curr, granularity
+
+def compute_new_customer_category_growth(df_curr: pd.DataFrame, df_prev: pd.DataFrame) -> pd.DataFrame:
+    """Computes category-level acquisition, volume, growth %, status, and low-base indicator."""
+    curr_cat = df_curr.groupby("category_name")["customer_id"].nunique().rename("current") if not df_curr.empty else pd.Series(dtype=int)
+    prev_cat = df_prev.groupby("category_name")["customer_id"].nunique().rename("previous") if not df_prev.empty else pd.Series(dtype=int)
+
+    all_cats = sorted(list(set(curr_cat.index.tolist() + prev_cat.index.tolist())))
+    if not all_cats:
+        return pd.DataFrame(columns=["category_name", "previous", "current", "net_change", "growth_pct", "growth_display", "status", "status_color", "is_low_base", "contribution_pct"])
+
+    cat_df = pd.DataFrame(index=all_cats)
+    cat_df["previous"] = cat_df.index.map(prev_cat).fillna(0).astype(int)
+    cat_df["current"] = cat_df.index.map(curr_cat).fillna(0).astype(int)
+    cat_df["net_change"] = cat_df["current"] - cat_df["previous"]
+
+    total_curr = cat_df["current"].sum()
+    cat_df["contribution_pct"] = cat_df["current"].apply(lambda c: round((c / total_curr * 100.0), 1) if total_curr > 0 else 0.0)
+
+    def _calc_row(row):
+        prev = int(row["previous"])
+        curr = int(row["current"])
+        net = curr - prev
+        is_low_base = (prev > 0 and prev < 5)
+
+        if prev == 0 and curr > 0:
+            growth_pct = None
+            growth_disp = "NEW"
+            status, color = "NEW", "#10B981"
+        elif prev == 0 and curr == 0:
+            growth_pct = 0.0
+            growth_disp = "-"
+            status, color = "NO ACTIVITY", "#9CA3AF"
+        else:
+            pct = round((net / prev) * 100.0, 1)
+            growth_pct = pct
+            base_badge = " [Low Base]" if is_low_base else ""
+            growth_disp = f"{pct:+.1f}%{base_badge}"
+            status, color = get_growth_status(net, pct, prev, curr)
+
+        return pd.Series([growth_pct, growth_disp, status, color, is_low_base], index=["growth_pct", "growth_display", "status", "status_color", "is_low_base"])
+
+    calc_res = cat_df.apply(_calc_row, axis=1)
+    cat_df = pd.concat([cat_df, calc_res], axis=1).reset_index().rename(columns={"index": "category_name"})
+    return cat_df.sort_values(by="current", ascending=False)
+
+def compute_new_customer_division_matrix(df_curr: pd.DataFrame) -> pd.DataFrame:
+    """Computes Division vs Customer Category cross-segment matrix."""
+    if df_curr.empty:
+        return pd.DataFrame()
+    piv = df_curr.pivot_table(
+        index="division_name",
+        columns="category_name",
+        values="customer_id",
+        aggfunc="nunique",
+        fill_value=0
+    )
+    piv["TOTAL"] = piv.sum(axis=1)
+    piv.loc["TOTAL"] = piv.sum(axis=0)
+    return piv
+
+def compute_new_customer_growth_drivers(df_curr: pd.DataFrame, df_prev: pd.DataFrame, top_n: int = 10) -> pd.DataFrame:
+    """Computes ranked Division x Category pairs driving positive customer growth, sorted by Net Change DESC."""
+    curr_dc = df_curr.groupby(["division_name", "category_name"])["customer_id"].nunique().rename("current") if not df_curr.empty else pd.Series(dtype=int)
+    prev_dc = df_prev.groupby(["division_name", "category_name"])["customer_id"].nunique().rename("previous") if not df_prev.empty else pd.Series(dtype=int)
+
+    all_keys = list(set(curr_dc.index.tolist() + prev_dc.index.tolist()))
+    if not all_keys:
+        return pd.DataFrame(columns=["division_name", "category_name", "previous", "current", "net_change", "growth_display"])
+
+    rows = []
+    for div, cat in all_keys:
+        p = int(prev_dc.get((div, cat), 0))
+        c = int(curr_dc.get((div, cat), 0))
+        net = c - p
+        if net > 0: # Only positive growth drivers
+            if p == 0:
+                disp = "NEW"
+            else:
+                pct = round((net / p) * 100.0, 1)
+                low = " [Low Base]" if p < 5 else ""
+                disp = f"{pct:+.1f}%{low}"
+            rows.append({
+                "division_name": div,
+                "category_name": cat,
+                "previous": p,
+                "current": c,
+                "net_change": net,
+                "growth_display": disp
+            })
+
+    driver_df = pd.DataFrame(rows)
+    if not driver_df.empty:
+        driver_df = driver_df.sort_values(by=["net_change", "current"], ascending=[False, False]).head(top_n)
+    return driver_df
+
+def compute_new_customer_declining_segments(df_curr: pd.DataFrame, df_prev: pd.DataFrame, top_n: int = 5) -> pd.DataFrame:
+    """Computes categories that experienced net customer decline."""
+    cat_growth = compute_new_customer_category_growth(df_curr, df_prev)
+    declining_cats = cat_growth[cat_growth["net_change"] < 0].sort_values(by="net_change", ascending=True)
+
+    if declining_cats.empty:
+        return pd.DataFrame(columns=["category_name", "previous", "current", "net_change", "growth_display", "most_impacted_division", "action_cta"])
+
+    rows = []
+    for _, row in declining_cats.head(top_n).iterrows():
+        cat = row["category_name"]
+        # Find which division had the biggest decline in this category
+        sub_curr = df_curr[df_curr["category_name"] == cat].groupby("division_name")["customer_id"].nunique() if not df_curr.empty else pd.Series(dtype=int)
+        sub_prev = df_prev[df_prev["category_name"] == cat].groupby("division_name")["customer_id"].nunique() if not df_prev.empty else pd.Series(dtype=int)
+
+        all_divs = list(set(sub_curr.index.tolist() + sub_prev.index.tolist()))
+        div_declines = {}
+        for d in all_divs:
+            div_declines[d] = int(sub_curr.get(d, 0)) - int(sub_prev.get(d, 0))
+
+        worst_div = min(div_declines.items(), key=lambda x: x[1])[0] if div_declines else "Semua Divisi"
+        worst_val = div_declines.get(worst_div, 0)
+
+        rows.append({
+            "category_name": cat,
+            "previous": int(row["previous"]),
+            "current": int(row["current"]),
+            "net_change": int(row["net_change"]),
+            "growth_display": row["growth_display"],
+            "most_impacted_division": f"{worst_div} ({worst_val:+d})",
+            "action_cta": f"Evaluasi saluran leads {cat} dan aktivitas sales di cabang {worst_div}."
+        })
+
+    return pd.DataFrame(rows)
+
+def generate_new_customer_insights(
+    kpis: dict,
+    cat_growth: pd.DataFrame,
+    drivers: pd.DataFrame,
+    declining: pd.DataFrame,
+    matrix: pd.DataFrame,
+    lang: str = "ID"
+) -> list:
+    """Generates dynamic 3-part business insights: TEMUAN -> MAKNA BISNIS -> RECOMMENDED CTA in ID or EN."""
+    insights = []
+    curr_total = kpis.get("curr_count", 0)
+    prev_total = kpis.get("prev_count", 0)
+    growth_disp = kpis.get("growth_display", "0.0%")
+    is_en = (lang == "EN")
+
+    # Insight 1: Kategori Utama & Konsentrasi Portofolio
+    if not cat_growth.empty and curr_total > 0:
+        top1 = cat_growth.iloc[0]
+        top1_name = top1["category_name"]
+        top1_cnt = top1["current"]
+        top1_pct = top1["contribution_pct"]
+
+        if len(cat_growth) > 1:
+            top2 = cat_growth.iloc[1]
+            top2_name = top2["category_name"]
+            top2_pct = top2["contribution_pct"]
+            two_share = top1_pct + top2_pct
+        else:
+            top2_name, top2_pct, two_share = "", 0.0, top1_pct
+
+        if is_en:
+            if two_share >= 70.0:
+                temuan = f"The {top1_name} category accounts for {top1_pct:.1f}% ({top1_cnt:,} customers) and combined with {top2_name} captures {two_share:.1f}% of all new customers in this period."
+                makna = f"Cipta Grafika customer acquisition is heavily concentrated in two primary segments. Total volume expansion relies disproportionately on the {top1_name} segment."
+                cta = f"Maintain acquisition channel momentum for {top1_name}, while actively expanding B2B categories (AGENTS, INDUSTRY, SME) to strengthen portfolio diversification."
+                title = f"Category Concentration: {top1_name} Dominance"
+            else:
+                temuan = f"The {top1_name} category is the leading contributor with {top1_pct:.1f}% ({top1_cnt:,} customers), followed by {top2_name} ({top2_pct:.1f}%)."
+                makna = "The new customer acquisition portfolio exhibits a healthy, balanced spread across multiple market segments."
+                cta = f"Scale targeted promotional campaigns for the second-ranked category ({top2_name}) to accelerate overall market share expansion."
+                title = f"Category Distribution: {top1_name} Intake Engine"
+            metric = f"{top1_name} {top1_pct:.1f}% ({top1_cnt:,} Accounts)"
+            context = f"Total {curr_total:,} New Customers ({growth_disp} growth vs previous period {prev_total:,})."
+            who_impacted = "Marketing Team, Merchandising, and Retail Store Managers."
+        else:
+            if two_share >= 70.0:
+                temuan = f"Kategori {top1_name} menyumbang {top1_pct:.1f}% ({top1_cnt:,} customer) dan bersama {top2_name} mencakup {two_share:.1f}% seluruh New Customer pada periode ini."
+                makna = f"Akuisisi customer Cipta Grafika masih sangat terkonsentrasi pada dua kategori utama. Pertumbuhan volume sangat bergantung pada segmen {top1_name}."
+                cta = f"Pertahankan efektivitas channel akuisisi {top1_name}, namun dorong pertumbuhan kategori B2B (AGEN, INDUSTRI, UMKM) untuk memperkuat diversifikasi portofolio."
+                title = f"Konsentrasi Kategori: Dominasi {top1_name}"
+            else:
+                temuan = f"Kategori {top1_name} menjadi kontributor terbesar dengan {top1_pct:.1f}% ({top1_cnt:,} customer), diikuti oleh {top2_name} ({top2_pct:.1f}%)."
+                makna = "Portofolio akuisisi customer relatif terdiversifikasi dengan sehat lintas segmen pasar."
+                cta = f"Tingkatkan alokasi kampanye promosi pada kategori nomor dua ({top2_name}) untuk mempercepat ekspansi pangsa pasar."
+                title = f"Distribusi Kategori: Lokomotif {top1_name}"
+            metric = f"{top1_name} {top1_pct:.1f}% ({top1_cnt:,} Akun)"
+            context = f"Total {curr_total:,} New Customer (Pertumbuhan {growth_disp} vs periode lalu {prev_total:,})."
+            who_impacted = "Tim Marketing, Merchandising, dan Retail Store Manager."
+
+        insights.append({
+            "title": title,
+            "metric": metric,
+            "context": context,
+            "insight": makna,
+            "who_impacted": who_impacted,
+            "action": cta,
+            "badge": "PORTFOLIO CONCENTRATION"
+        })
+
+    # Insight 2: Area Pelemahan (Needs Attention)
+    if not declining.empty:
+        worst = declining.iloc[0]
+        w_cat = worst["category_name"]
+        w_prev = worst["previous"]
+        w_curr = worst["current"]
+        w_chg = worst["net_change"]
+        w_growth = worst["growth_display"]
+        w_div = worst["most_impacted_division"]
+
+        if is_en:
+            title = f"Category Contraction Warning: {w_cat}"
+            metric = f"{w_cat} Contracted {w_chg:+d} Accounts ({w_growth})"
+            context = f"Previous period registered {w_prev:,} new customers, contracting to {w_curr:,} in the current period."
+            makna = f"Lead generation or acquisition channel momentum softened for {w_cat}, indicating potential conversion friction or competitor pressure in {w_div}."
+            cta = f"Commercial leadership and branch managers at {w_div.split()[0]} should immediately audit lead pipelines, CS response times, and price competitiveness for {w_cat}."
+            who_impacted = f"Sales Leadership & Branch Management ({w_div})."
+        else:
+            title = f"Peringatan Pelemahan Kategori: {w_cat}"
+            metric = f"{w_cat} Turun {w_chg:+d} Akun ({w_growth})"
+            context = f"Periode lalu mencatatkan {w_prev:,} customer baru, kini turun menjadi {w_curr:,}."
+            makna = f"Terjadi pelemahan saluran akuisisi atau potensi kehilangan prospek {w_cat} kepada kompetitor pada cabang terkait."
+            cta = f"Manajer Penjualan dan Branch Manager {w_div.split()[0]} segera evaluasi sumber lead, kecepatan follow-up CS, dan kesesuaian harga penawaran kategori {w_cat}."
+            who_impacted = f"Sales Manager & Branch Manager {w_div}."
+
+        insights.append({
+            "title": title,
+            "metric": metric,
+            "context": context,
+            "insight": makna,
+            "who_impacted": who_impacted,
+            "action": cta,
+            "badge": "NEEDS ATTENTION"
+        })
+
+    # Insight 3: Pendorong Pertumbuhan Utama (Top Growth Driver)
+    if not drivers.empty:
+        top_drv = drivers.iloc[0]
+        d_div = top_drv["division_name"]
+        d_cat = top_drv["category_name"]
+        d_net = top_drv["net_change"]
+        d_curr = top_drv["current"]
+        d_growth = top_drv["growth_display"]
+
+        if is_en:
+            title = f"Primary Growth Engine: {d_div} × {d_cat}"
+            metric = f"+{d_net:,} Net New Customers ({d_growth})"
+            context = "Generated the highest positive acquisition surge across all Division × Category pairings."
+            makna = f"Sales approach and regional initiatives at {d_div} demonstrated superior effectiveness in converting new {d_cat} accounts."
+            cta = f"Document successful sales workflows and channel playbooks from {d_div} and replicate them across other branches where {d_cat} adoption is lagging."
+            who_impacted = f"Branch Manager of {d_div} & Commercial Sales Team."
+        else:
+            title = f"Lokomotif Pertumbuhan: {d_div} × {d_cat}"
+            metric = f"+{d_net:,} Customer Baru ({d_growth})"
+            context = "Menyumbang lonjakan tertinggi di antara seluruh kombinasi Divisi × Kategori."
+            makna = f"Strategi operasional dan pendekatan sales {d_div} sangat efektif dalam menjaring customer baru pada segmen {d_cat}."
+            cta = f"Dokumentasikan taktik akuisisi sukses dari {d_div} dan replikasikan ke cabang lain yang performa segmen {d_cat}-nya masih rendah."
+            who_impacted = f"Branch Manager {d_div} & Tim Komersial."
+
+        insights.append({
+            "title": title,
+            "metric": metric,
+            "context": context,
+            "insight": makna,
+            "who_impacted": who_impacted,
+            "action": cta,
+            "badge": "GROWTH DRIVER"
+        })
+
+    return insights
+
+def compute_cetakia_realtime_acquisition_stats(
+    df: pd.DataFrame,
+    division: str = None,
+    category: str = None,
+    ref_time: datetime.datetime = None
+) -> dict:
+    """Computes exact acquisition metrics mirroring Cetakia API's getNewCustomersStats query:
+    - last_3_days: created_at >= NOW() - INTERVAL '3 days'
+    - previous_3_days: created_at >= NOW() - INTERVAL '6 days' AND created_at < NOW() - INTERVAL '3 days'
+    - last_7_days: created_at >= NOW() - INTERVAL '7 days'
+    - previous_7_days: created_at >= NOW() - INTERVAL '14 days' AND created_at < NOW() - INTERVAL '7 days'
+    - last_30_days: created_at >= NOW() - INTERVAL '30 days'
+    - previous_30_days: created_at >= NOW() - INTERVAL '60 days' AND created_at < NOW() - INTERVAL '30 days'
+    - total_customers: active customers (customer_deleted_at IS NULL)
+    """
+    if df.empty:
+        return {
+            "last_3_days": 0, "previous_3_days": 0, "diff_3": 0, "growth_3": 0.0,
+            "last_7_days": 0, "previous_7_days": 0, "diff_7": 0, "growth_7": 0.0,
+            "last_30_days": 0, "previous_30_days": 0, "diff_30": 0, "growth_30": 0.0,
+            "total_customers": 0, "ref_time": datetime.datetime.now()
+        }
+
+    # Filter active customers (deleted_at IS NULL)
+    data = df.copy()
+    if "customer_deleted_at" in data.columns:
+        data = data[data["customer_deleted_at"].isna()]
+    if "is_deleted_customer" in data.columns:
+        data = data[data["is_deleted_customer"] == False]
+
+    # Filter by division & category if selected
+    if division and division not in ["All Branches", "Semua Cabang", "Semua Cabang / All"]:
+        data = data[data["division_name"] == division]
+    if category and category not in ["All Segments", "Semua Segmen", "Semua Kategori / All"]:
+        data = data[data["category_name"] == category.upper()]
+
+    # Normalized timestamp
+    if "created_at_jakarta" in data.columns:
+        data["created_dt"] = pd.to_datetime(data["created_at_jakarta"])
+    elif "customer_created_at" in data.columns:
+        data["created_dt"] = pd.to_datetime(data["customer_created_at"])
+    else:
+        data["created_dt"] = pd.to_datetime(data["created_at"])
+
+    # Reference time: if None, use max timestamp in data
+    if ref_time is None:
+        ref_time = data["created_dt"].max() if not data.empty else pd.Timestamp.now()
+    elif isinstance(ref_time, (datetime.date, str)):
+        ref_time = pd.to_datetime(ref_time)
+
+    # Intervals calculation
+    l3 = data[data["created_dt"] >= ref_time - pd.Timedelta(days=3)]
+    p3 = data[(data["created_dt"] >= ref_time - pd.Timedelta(days=6)) & (data["created_dt"] < ref_time - pd.Timedelta(days=3))]
+    l7 = data[data["created_dt"] >= ref_time - pd.Timedelta(days=7)]
+    p7 = data[(data["created_dt"] >= ref_time - pd.Timedelta(days=14)) & (data["created_dt"] < ref_time - pd.Timedelta(days=7))]
+    l30 = data[data["created_dt"] >= ref_time - pd.Timedelta(days=30)]
+    p30 = data[(data["created_dt"] >= ref_time - pd.Timedelta(days=60)) & (data["created_dt"] < ref_time - pd.Timedelta(days=30))]
+
+    tot = len(data)
+    l3_count = len(l3)
+    p3_count = len(p3)
+    l7_count = len(l7)
+    p7_count = len(p7)
+    l30_count = len(l30)
+    p30_count = len(p30)
+
+    # 3-Day growth
+    diff_3 = l3_count - p3_count
+    if p3_count > 0:
+        growth_3 = round((diff_3 / p3_count) * 100.0, 1)
+    else:
+        growth_3 = 100.0 if l3_count > 0 else 0.0
+
+    # 7-Day growth
+    diff_7 = l7_count - p7_count
+    if p7_count > 0:
+        growth_7 = round((diff_7 / p7_count) * 100.0, 1)
+    else:
+        growth_7 = 100.0 if l7_count > 0 else 0.0
+
+    # 30-Day growth
+    diff_30 = l30_count - p30_count
+    if p30_count > 0:
+        growth_30 = round((diff_30 / p30_count) * 100.0, 1)
+    else:
+        growth_30 = 100.0 if l30_count > 0 else 0.0
+
+    # Breakdown by category for 30 days
+    cat_30 = l30.groupby("category_name")["customer_id"].nunique().sort_values(ascending=False) if not l30.empty else pd.Series(dtype=int)
+    top_cat = cat_30.index[0] if not cat_30.empty else "-"
+    top_cat_cnt = int(cat_30.iloc[0]) if not cat_30.empty else 0
+    top_cat_pct = round((top_cat_cnt / l30_count * 100.0), 1) if l30_count > 0 else 0.0
+
+    # Breakdown by division for 30 days
+    div_30 = l30.groupby("division_name")["customer_id"].nunique().sort_values(ascending=False) if not l30.empty else pd.Series(dtype=int)
+    top_div = div_30.index[0] if not div_30.empty else "-"
+    top_div_cnt = int(div_30.iloc[0]) if not div_30.empty else 0
+
+    return {
+        "last_3_days": l3_count,
+        "previous_3_days": p3_count,
+        "diff_3": diff_3,
+        "growth_3": growth_3,
+        "last_7_days": l7_count,
+        "previous_7_days": p7_count,
+        "diff_7": diff_7,
+        "growth_7": growth_7,
+        "last_30_days": l30_count,
+        "previous_30_days": p30_count,
+        "diff_30": diff_30,
+        "growth_30": growth_30,
+        "total_customers": tot,
+        "ref_time": ref_time,
+        "top_category": top_cat,
+        "top_category_count": top_cat_cnt,
+        "top_category_pct": top_cat_pct,
+        "top_division": top_div,
+        "top_division_count": top_div_cnt,
+        "df_l3": l3,
+        "df_p3": p3,
+        "df_l30": l30
     }
 
