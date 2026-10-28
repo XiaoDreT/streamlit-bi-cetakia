@@ -851,7 +851,9 @@ def get_growth_status(net_change: int, growth_pct: float, prev_count: int, curr_
     Returns (status_label, hex_color):
     - NEW: Previous = 0 and Current > 0
     - NO ACTIVITY: Previous = 0 and Current = 0
-    - SHARP DECLINE: Growth <= -30% or Current = 0 with Prev > 0
+    - LOW BASE: Previous > 0 and Previous < 5 (prevents alarming flags on tiny samples)
+    - VOLUME DROP: Net loss <= -20 accounts (prevents misleading 'STABLE' on large baseline drops)
+    - SHARP DECLINE: Growth <= -30%
     - DECLINING: Growth < -10% and > -30%
     - STABLE: -10% <= Growth <= +10%
     - GROWING: Growth > +10%
@@ -860,10 +862,20 @@ def get_growth_status(net_change: int, growth_pct: float, prev_count: int, curr_
         return "NEW", "#10B981"
     if prev_count == 0 and curr_count == 0:
         return "NO ACTIVITY", "#9CA3AF"
-    if curr_count == 0 and prev_count > 0:
+    if prev_count > 0 and prev_count < 5:
+        if net_change > 0:
+            return "GROWING [LOW BASE]", "#10B981"
+        elif net_change < 0:
+            return "DIP [LOW BASE]", "#6B7280"
+        else:
+            return "STABLE [LOW BASE]", "#9CA3AF"
+    if curr_count == 0 and prev_count >= 5:
         return "SHARP DECLINE", "#EF4444"
     if growth_pct is None:
         return "NEW", "#10B981"
+    # Volume safety check: losing 20+ customers should never be flagged as harmless STABLE
+    if net_change <= -20:
+        return "VOLUME DROP", "#EF4444"
     if growth_pct > 10.0:
         return "GROWING", "#10B981"
     elif -10.0 <= growth_pct <= 10.0:
@@ -872,6 +884,78 @@ def get_growth_status(net_change: int, growth_pct: float, prev_count: int, curr_
         return "DECLINING", "#F59E0B"
     else:
         return "SHARP DECLINE", "#EF4444"
+
+def get_category_business_status(
+    net_change: int,
+    growth_pct: float,
+    prev_count: int,
+    curr_count: int,
+    is_en: bool = False
+) -> tuple:
+    """
+    Evaluates category growth with user-friendly, non-misleading, business-first rules:
+    - If baseline < 5: flags as Low Base / Basis Kecil so extreme % does not confuse laymen.
+    - If real volume drops heavily (net <= -20): flags as Volume Drop even if % looks small.
+    - Clearly distinguishes fast growth, positive growth, stable, mild softening, and sharp drop.
+    Returns: (status_label, hex_color, explanation_str)
+    """
+    if prev_count == 0 and curr_count > 0:
+        lbl = "Segmen Baru" if not is_en else "New Intake"
+        desc = f"+{curr_count} customer baru pertama kali" if not is_en else f"+{curr_count} new accounts from zero base"
+        return lbl, "#10B981", desc
+
+    if prev_count == 0 and curr_count == 0:
+        lbl = "Tidak Ada Aktivitas" if not is_en else "No Activity"
+        desc = "Belum ada customer baru di kedua periode" if not is_en else "No new customers in either period"
+        return lbl, "#9CA3AF", desc
+
+    # 1. Low baseline (< 5 accounts)
+    if prev_count < 5:
+        if net_change > 0:
+            lbl = "Tumbuh [Basis Kecil]" if not is_en else "Growth [Low Base]"
+            desc = f"Bertambah +{net_change} customer (basis awal hanya {prev_count} akun)" if not is_en else f"Added +{net_change} accounts on small baseline of {prev_count}"
+            return lbl, "#10B981", desc
+        elif net_change < 0:
+            lbl = "Fluktuasi [Basis Kecil]" if not is_en else "Minor Dip [Low Base]"
+            desc = f"Menyusut {net_change} customer (basis awal hanya {prev_count} akun, fluktuasi wajar)" if not is_en else f"Contracted {net_change} on small baseline of {prev_count} (normal variation)"
+            return lbl, "#6B7280", desc
+        else:
+            lbl = "Tetap [Basis Kecil]" if not is_en else "Flat [Low Base]"
+            desc = f"Volume tetap {curr_count} customer" if not is_en else f"Volume maintained at {curr_count} accounts"
+            return lbl, "#9CA3AF", desc
+
+    # 2. Normal baseline (>= 5 accounts)
+    # Check for large real volume loss (e.g. net <= -20)
+    if net_change <= -20:
+        lbl = "Pelemahan Volume Signifikan" if not is_en else "Significant Volume Drop"
+        desc = f"Kehilangan {abs(net_change)} customer riil (dampak volume terbesar, evaluasi saluran)" if not is_en else f"Lost {abs(net_change)} real accounts (largest volume impact, pipeline audit advised)"
+        return lbl, "#EF4444", desc
+
+    # High growth
+    if growth_pct is not None and growth_pct >= 20.0 and net_change >= 5:
+        lbl = "Tumbuh Pesat" if not is_en else "Fast Growing"
+        desc = f"Melonjak +{net_change} customer (+{growth_pct:.1f}%), pendorong ekspansi utama" if not is_en else f"Surged +{net_change} accounts (+{growth_pct:.1f}%), key expansion driver"
+        return lbl, "#10B981", desc
+    elif net_change > 0:
+        lbl = "Tumbuh Positif" if not is_en else "Growing"
+        desc = f"Bertambah +{net_change} customer ({growth_pct:+.1f}%)" if not is_en else f"Added +{net_change} accounts ({growth_pct:+.1f}%)"
+        return lbl, "#10B981", desc
+    elif net_change == 0:
+        lbl = "Stabil (Tetap)" if not is_en else "Stable (Unchanged)"
+        desc = f"Sama persis dengan periode lalu ({curr_count} customer)" if not is_en else f"Maintained exact same count ({curr_count} accounts)"
+        return lbl, "#6B7280", desc
+    elif -10.0 <= growth_pct < 0 and net_change > -10:
+        lbl = "Relatif Stabil" if not is_en else "Relatively Stable"
+        desc = f"Fluktuasi ringan ({net_change:+d} customer / {growth_pct:+.1f}%)" if not is_en else f"Mild variation ({net_change:+d} accounts / {growth_pct:+.1f}%)"
+        return lbl, "#6B7280", desc
+    elif growth_pct < -30.0:
+        lbl = "Penurunan Tajam" if not is_en else "Sharp Contraction"
+        desc = f"Menyusut drastis {abs(net_change)} customer ({growth_pct:.1f}%)" if not is_en else f"Steep drop of {abs(net_change)} accounts ({growth_pct:.1f}%)"
+        return lbl, "#EF4444", desc
+    else:
+        lbl = "Mengalami Penurunan" if not is_en else "Declining"
+        desc = f"Berkurang {abs(net_change)} customer ({growth_pct:.1f}%)" if not is_en else f"Decreased by {abs(net_change)} accounts ({growth_pct:.1f}%)"
+        return lbl, "#F59E0B", desc
 
 def compute_new_customer_kpis(
     df: pd.DataFrame,
@@ -1041,7 +1125,20 @@ def compute_new_customer_category_growth(df_curr: pd.DataFrame, df_prev: pd.Data
             growth_disp = f"{pct:+.1f}%{base_badge}"
             status, color = get_growth_status(net, pct, prev, curr)
 
-        return pd.Series([growth_pct, growth_disp, status, color, is_low_base], index=["growth_pct", "growth_display", "status", "status_color", "is_low_base"])
+        status_id, bus_color, desc_id = get_category_business_status(net, growth_pct, prev, curr, is_en=False)
+        status_en, _, desc_en = get_category_business_status(net, growth_pct, prev, curr, is_en=True)
+        growth_disp_id = f"{growth_pct:+.1f}%{' [Basis Kecil]' if is_low_base else ''}" if growth_pct is not None else ("BARU" if curr > 0 else "-")
+        growth_disp_en = f"{growth_pct:+.1f}%{' [Low Base]' if is_low_base else ''}" if growth_pct is not None else ("NEW" if curr > 0 else "-")
+
+        return pd.Series([
+            growth_pct, growth_disp, status, color, is_low_base,
+            status_id, status_en, bus_color, desc_id, desc_en,
+            growth_disp_id, growth_disp_en
+        ], index=[
+            "growth_pct", "growth_display", "status", "status_color", "is_low_base",
+            "status_id", "status_en", "business_color", "desc_id", "desc_en",
+            "growth_display_id", "growth_display_en"
+        ])
 
     calc_res = cat_df.apply(_calc_row, axis=1)
     cat_df = pd.concat([cat_df, calc_res], axis=1).reset_index().rename(columns={"index": "category_name"})
