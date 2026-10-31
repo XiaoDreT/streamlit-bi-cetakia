@@ -646,96 +646,249 @@ if not cat_growth_df.empty:
     ]
     render_summary_strip(strip_items)
 
-    # 2. Visual Diverging Bar Chart (Real Customer Volume Changes)
-    chart_df = cat_growth_df.sort_values(by="net_change", ascending=True).copy()
-    bar_colors = ["#10B981" if x > 0 else ("#EF4444" if x < 0 else "#9CA3AF") for x in chart_df["net_change"]]
-    bar_texts = [
-        f"+{x:,} customer ({p})" if x > 0 else (f"{x:,} customer ({p})" if x < 0 else f"0 customer ({p})")
-        for x, p in zip(chart_df["net_change"], chart_df["growth_display_en" if is_en else "growth_display_id"])
-    ]
-
-    fig_div = go.Figure(go.Bar(
-        x=chart_df["net_change"],
-        y=chart_df["category_name"],
-        orientation="h",
-        marker_color=bar_colors,
-        text=bar_texts,
-        textposition="outside",
-        cliponaxis=False,
-        customdata=chart_df[[
-            "previous",
-            "current",
-            "growth_display_en" if is_en else "growth_display_id",
-            "status_en" if is_en else "status_id",
-            "contribution_pct",
-            "desc_en" if is_en else "desc_id"
-        ]].values,
-        hovertemplate=(
-            "<b>Kategori: %{y}</b><br>"
-            "Perubahan Bersih: <b>%{x:+d} Customer Baru</b><br>"
-            "Periode Lalu: <b>%{customdata[0]:,}</b> → Periode Ini: <b>%{customdata[1]:,}</b><br>"
-            "Laju Pertumbuhan: <b>%{customdata[2]}</b><br>"
-            "Status Bisnis: <b>%{customdata[3]}</b><br>"
-            "Pangsa Portofolio: <b>%{customdata[4]:.1f}%</b><br>"
-            "Makna: <i>%{customdata[5]}</i><extra></extra>"
-        ) if not is_en else (
-            "<b>Category: %{y}</b><br>"
-            "Net Change: <b>%{x:+d} New Customers</b><br>"
-            "Previous: <b>%{customdata[0]:,}</b> → Current: <b>%{customdata[1]:,}</b><br>"
-            "Growth Rate: <b>%{customdata[2]}</b><br>"
-            "Business Status: <b>%{customdata[3]}</b><br>"
-            "Portfolio Share: <b>%{customdata[4]:.1f}%</b><br>"
-            "Meaning: <i>%{customdata[5]}</i><extra></extra>"
-        )
-    ))
-
-    fig_div.add_vline(x=0, line_dash="solid", line_color="rgba(156, 163, 175, 0.4)", line_width=1.5)
-    fig_div.update_layout(
-        xaxis=dict(
-            title="Penambahan / Pengurangan Riil (Customer Baru)" if not is_en else "Net Customer Intake (+/- Accounts)",
-            zeroline=False,
-            showgrid=True,
-            gridcolor="rgba(156, 163, 175, 0.15)"
-        ),
-        yaxis=dict(
-            title=None,
-            showgrid=False
-        ),
-        margin=dict(l=10, r=40, t=10, b=10)
-    )
-    apply_plotly_theme(fig_div, height=max(320, len(chart_df) * 44))
-
+    # 2. Intuitive & User-Friendly Visualization of New Customer Growth
     st.markdown(
-        "##### 📊 Visual Perubahan Riil Customer Baru (+/- Orang)"
+        "##### 📊 Evaluasi Pertumbuhan Customer Baru: Periode Lalu vs Periode Sekarang"
         if not is_en
-        else "##### 📊 Visual Real Customer Volume Change (+/- Accounts)"
+        else "##### 📊 New Customer Growth Evaluation: Previous vs Current Period"
     )
     st.caption(
-        "Batang **hijau ke kanan** menandakan kategori bertumbuh. Batang **merah ke kiri** menandakan kategori yang mengalami penurunan pelanggan."
+        "Perbandingan langsung perolehan customer baru antara periode lalu vs saat ini. "
+        "Batang abu-abu menunjukkan hasil periode lalu, sedangkan batang berwarna menunjukkan hasil periode saat ini."
         if not is_en
-        else "Green bars extending right indicate customer gains. Red bars extending left indicate customer losses."
+        else "Direct side-by-side comparison of new customer acquisition. Gray bars show previous period, colored bars show current period."
     )
-    st.plotly_chart(fig_div, use_container_width=True)
+
+    tab_comp, tab_split = st.tabs([
+        "📊 Grafik Komparasi Berdampingan" if not is_en else "📊 Side-by-Side Comparison",
+        "🧭 Ringkasan Pendorong vs Penurunan" if not is_en else "🧭 Gainers vs Decliners Summary"
+    ])
+
+    with tab_comp:
+        c_chart_sort, _ = st.columns([2.5, 3.5])
+        with c_chart_sort:
+            chart_sort_opt = st.selectbox(
+                "Urutkan Grafik:" if not is_en else "Sort Chart By:",
+                options=[
+                    "Volume Periode Ini (Terbanyak ke Terkecil)" if not is_en else "Current Volume (High to Low)",
+                    "Pertumbuhan Tertinggi (Paling Bertambah)" if not is_en else "Highest Growth (Top Gainers)",
+                    "Penurunan Terbesar (Paling Melambat)" if not is_en else "Largest Drop (Top Decliners)",
+                    "Nama Kategori (A - Z)" if not is_en else "Category Name (A - Z)"
+                ],
+                key="nc_chart_sort_select"
+            )
+
+        if "Volume Periode Ini" in chart_sort_opt or "Current Volume" in chart_sort_opt:
+            chart_df = cat_growth_df.sort_values(by="current", ascending=False).copy()
+        elif "Pertumbuhan Tertinggi" in chart_sort_opt or "Highest Growth" in chart_sort_opt:
+            chart_df = cat_growth_df.sort_values(by="net_change", ascending=False).copy()
+        elif "Penurunan Terbesar" in chart_sort_opt or "Largest Drop" in chart_sort_opt:
+            chart_df = cat_growth_df.sort_values(by="net_change", ascending=True).copy()
+        else:
+            chart_df = cat_growth_df.sort_values(by="category_name", ascending=True).copy()
+
+        curr_colors = [
+            "#10B981" if net > 0 else ("#EF4444" if net < 0 else "#64748B")
+            for net in chart_df["net_change"]
+        ]
+
+        curr_texts = []
+        for c, n, p in zip(
+            chart_df["current"],
+            chart_df["net_change"],
+            chart_df["growth_display_en" if is_en else "growth_display_id"]
+        ):
+            if n > 0:
+                curr_texts.append(f"{c:,} (🟢 +{n:,} | {p})")
+            elif n < 0:
+                curr_texts.append(f"{c:,} (🔻 {n:,} | {p})")
+            else:
+                curr_texts.append(f"{c:,} (= Tetap)" if not is_en else f"{c:,} (= Flat)")
+
+        prev_texts = [f"{p:,} customer" if not is_en else f"{p:,} accounts" for p in chart_df["previous"]]
+
+        fig_comp = go.Figure()
+
+        # Trace 1: Periode Lalu
+        fig_comp.add_trace(go.Bar(
+            y=chart_df["category_name"],
+            x=chart_df["previous"],
+            name="Periode Lalu" if not is_en else "Previous Period",
+            orientation="h",
+            marker_color="#94A3B8",
+            text=prev_texts,
+            textposition="auto",
+            opacity=0.85,
+            hovertemplate=(
+                "<b>%{y} (Periode Lalu)</b><br>"
+                "Perolehan Customer Baru: <b>%{x:,}</b><extra></extra>"
+                if not is_en else
+                "<b>%{y} (Previous Period)</b><br>"
+                "New Customer Intake: <b>%{x:,}</b><extra></extra>"
+            )
+        ))
+
+        # Trace 2: Periode Ini
+        fig_comp.add_trace(go.Bar(
+            y=chart_df["category_name"],
+            x=chart_df["current"],
+            name="Periode Ini" if not is_en else "Current Period",
+            orientation="h",
+            marker_color=curr_colors,
+            text=curr_texts,
+            textposition="outside",
+            cliponaxis=False,
+            customdata=chart_df[[
+                "previous",
+                "net_change",
+                "growth_display_en" if is_en else "growth_display_id",
+                "status_en" if is_en else "status_id",
+                "contribution_pct",
+                "desc_en" if is_en else "desc_id"
+            ]].values,
+            hovertemplate=(
+                "<b>%{y} (Periode Ini)</b><br>"
+                "Perolehan Customer Baru: <b>%{x:,}</b><br>"
+                "Periode Lalu: <b>%{customdata[0]:,}</b><br>"
+                "Perubahan Riil: <b>%{customdata[1]:+d} customer</b> (%{customdata[2]})<br>"
+                "Status Kinerja: <b>%{customdata[3]}</b><br>"
+                "Pangsa Kontribusi: <b>%{customdata[4]:.1f}%</b><br>"
+                "Makna Bisnis: <i>%{customdata[5]}</i><extra></extra>"
+                if not is_en else
+                "<b>%{y} (Current Period)</b><br>"
+                "New Customer Intake: <b>%{x:,}</b><br>"
+                "Previous Period: <b>%{customdata[0]:,}</b><br>"
+                "Net Change: <b>%{customdata[1]:+d} accounts</b> (%{customdata[2]})<br>"
+                "Performance Status: <b>%{customdata[3]}</b><br>"
+                "Portfolio Share: <b>%{customdata[4]:.1f}%</b><br>"
+                "Takeaway: <i>%{customdata[5]}</i><extra></extra>"
+            )
+        ))
+
+        max_val = max(chart_df["current"].max(), chart_df["previous"].max())
+        apply_plotly_theme(fig_comp, height=max(360, len(chart_df) * 48))
+        fig_comp.update_layout(
+            barmode="group",
+            yaxis=dict(
+                title=None,
+                autorange="reversed",
+                showgrid=False
+            ),
+            xaxis=dict(
+                title="Jumlah Perolehan Customer Baru (Orang)" if not is_en else "New Customer Intake (Accounts)",
+                range=[0, max_val * 1.30],
+                showgrid=True,
+                gridcolor="rgba(156, 163, 175, 0.15)"
+            ),
+            margin=dict(l=10, r=110, t=25, b=10),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+
+        st.plotly_chart(fig_comp, use_container_width=True)
+
+        st.markdown(f"""
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--text-color, inherit); opacity: 0.9; margin-top: -6px; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 12px; height: 12px; background: #94A3B8; border-radius: 3px;"></span>
+                <span>{'<b>Periode Lalu:</b> Angka pembanding dasar (baseline)' if not is_en else '<b>Previous Period:</b> Baseline comparison volume'}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 12px; height: 12px; background: #10B981; border-radius: 3px;"></span>
+                <span>{'<b>Hijau (Tumbuh):</b> Perolehan bertambah lebih banyak' if not is_en else '<b>Green (Growing):</b> Intake higher than baseline'}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 12px; height: 12px; background: #EF4444; border-radius: 3px;"></span>
+                <span>{'<b>Merah (Turun):</b> Perolehan lebih sedikit dibanding periode lalu' if not is_en else '<b>Red (Drop):</b> Intake lower than baseline'}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with tab_split:
+        col_grow, col_drop = st.columns(2)
+        gainers_df = cat_growth_df[cat_growth_df["net_change"] > 0].sort_values(by="net_change", ascending=False)
+        losers_df = cat_growth_df[cat_growth_df["net_change"] < 0].sort_values(by="net_change", ascending=True)
+
+        with col_grow:
+            st.markdown(
+                f"<div style='font-size: 14px; font-weight: 700; color: #10B981; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;'>🟢 {'Kategori Bertumbuh' if not is_en else 'Growing Categories'} ({len(gainers_df)})</div>",
+                unsafe_allow_html=True
+            )
+            if gainers_df.empty:
+                st.caption("Tidak ada kategori yang mencatatkan pertumbuhan positif pada periode ini." if not is_en else "No categories recorded positive customer growth in this period.")
+            else:
+                for _, r in gainers_df.iterrows():
+                    st.markdown(f"""
+                    <div style="background-color: var(--secondary-background-color, rgba(16,185,129,0.05)); border: 1px solid rgba(16,185,129,0.3); border-left: 4px solid #10B981; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-weight: 700; font-size: 14px; color: var(--text-color, inherit);">{r['category_name']}</span>
+                            <span style="background-color: rgba(16,185,129,0.15); color: #10B981; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px;">{r['growth_display_en' if is_en else 'growth_display_id']}</span>
+                        </div>
+                        <div style="font-size: 18px; font-weight: 800; color: #10B981; margin-bottom: 4px;">+{r['net_change']:,} {'Customer Baru' if not is_en else 'New Accounts'}</div>
+                        <div style="font-size: 12px; color: var(--text-color, inherit); opacity: 0.85; margin-bottom: 4px;">
+                            {'Periode Lalu' if not is_en else 'Previous'}: <b>{r['previous']:,}</b> → {'Periode Ini' if not is_en else 'Current'}: <b>{r['current']:,}</b>
+                        </div>
+                        <div style="font-size: 11.5px; opacity: 0.75;">{'Porsi' if not is_en else 'Share'}: {r['contribution_pct']:.1f}% · {r['status_en' if is_en else 'status_id']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        with col_drop:
+            st.markdown(
+                f"<div style='font-size: 14px; font-weight: 700; color: #EF4444; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;'>🔴 {'Kategori Mengalami Penurunan' if not is_en else 'Declining Categories'} ({len(losers_df)})</div>",
+                unsafe_allow_html=True
+            )
+            if losers_df.empty:
+                st.caption("Seluruh kategori berhasil mempertahankan atau meningkatkan perolehan customer." if not is_en else "All categories maintained or increased customer intake.")
+            else:
+                for _, r in losers_df.iterrows():
+                    is_lb = r["is_low_base"]
+                    border_color = "#F59E0B" if is_lb else "#EF4444"
+                    badge_bg = "rgba(245,158,11,0.15)" if is_lb else "rgba(239,68,68,0.15)"
+                    badge_color = "#F59E0B" if is_lb else "#EF4444"
+                    ctx_note = (
+                        ("⚠️ <i>Basis kecil (<5 customer): Fluktuasi 1-2 orang wajar, bukan masalah operasional.</i>" if not is_en else "⚠️ <i>Small baseline (<5 accounts): Normal variance of 1-2 accounts, not an operational issue.</i>")
+                        if is_lb
+                        else (f"📉 <i>Porsi besar ({r['contribution_pct']:.1f}%): Tetap basis utama, namun laju perolehan melambat.</i>" if not is_en else f"📉 <i>Major segment ({r['contribution_pct']:.1f}%): Main volume engine, intake pace slowed.</i>")
+                    )
+
+                    st.markdown(f"""
+                    <div style="background-color: var(--secondary-background-color, rgba(239,68,68,0.05)); border: 1px solid rgba(239,68,68,0.25); border-left: 4px solid {border_color}; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-weight: 700; font-size: 14px; color: var(--text-color, inherit);">{r['category_name']}</span>
+                            <span style="background-color: {badge_bg}; color: {badge_color}; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px;">{r['growth_display_en' if is_en else 'growth_display_id']}</span>
+                        </div>
+                        <div style="font-size: 18px; font-weight: 800; color: #EF4444; margin-bottom: 4px;">{r['net_change']:,} {'Customer Baru' if not is_en else 'New Accounts'}</div>
+                        <div style="font-size: 12px; color: var(--text-color, inherit); opacity: 0.85; margin-bottom: 4px;">
+                            {'Periode Lalu' if not is_en else 'Previous'}: <b>{r['previous']:,}</b> → {'Periode Ini' if not is_en else 'Current'}: <b>{r['current']:,}</b>
+                        </div>
+                        <div style="font-size: 11.5px; opacity: 0.85;">{ctx_note}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
     # 3. Plain Language Business Interpretation Guide
     guide_point1 = (
-        f"Kenaikan pada <b>{g_name} (+{g_net:,} customer)</b> memberikan dampak pertumbuhan operasional yang sangat riil. Sebaliknya, penurunan pada <b>{l_name} ({l_net:,} customer)</b> adalah kehilangan volume terbesar periode ini meskipun persentasenya terlihat moderat ({l_pct}), karena {l_name} mencakup {top_share_cat['contribution_pct']:.1f}% basis pelanggan Cetakia."
-        if (g_name and l_name)
-        else ("Fokuskan pemantauan pada perubahan angka riil (+/- customer) untuk mengukur dampak langsung ke kapasitas operasional." if not is_en else "Focus on real customer volume (+/- accounts) to evaluate operational capacity impact.")
+        f"<b>Penurunan volume di halaman ini BUKAN berarti pelanggan lama kabur (churn)</b>. Ini menandakan jumlah customer baru yang mendaftar pada periode ini ({top_share_cat['current']:,} akun) lebih sedikit dibanding periode sebelumnya ({top_share_cat['previous']:,} akun). Cetakia tetap menambah ratusan pelanggan baru!"
+        if not is_en
+        else f"<b>Volume decline here does NOT mean existing customers churned</b>. It merely indicates that newly acquired accounts this period ({top_share_cat['current']:,}) were fewer than previous period's intake ({top_share_cat['previous']:,}). Cetakia is still acquiring hundreds of new customers!"
     )
 
     low_base_list = cat_growth_df[cat_growth_df["is_low_base"]]["category_name"].tolist()
     low_base_str = ", ".join(low_base_list) if low_base_list else ("DIVISI" if not is_en else "DIVISION")
     guide_point2 = (
-        f"Kategori seperti <b>{low_base_str}</b> memiliki jumlah dasar sangat sedikit (< 5 customer). Penurunan atau kenaikan 1-2 orang sudah menghasilkan persentase ekstrim (-100% atau +66.7%). Ini adalah <i>fluktuasi wajar basis kecil</i> dan bukan krisis operasional."
+        f"Kategori seperti <b>{low_base_str}</b> memiliki jumlah dasar sangat sedikit (< 5 customer). Penurunan 1-2 orang sudah menghasilkan persentase ekstrim (-100% atau +66.7%). Ini adalah <i>fluktuasi wajar basis kecil</i> dan bukan krisis operasional."
         if not is_en
-        else f"Categories such as <b>{low_base_str}</b> have very small baselines (< 5 accounts). Shifts of 1-2 people generate extreme percentages; these are normal baseline variations rather than operational issues."
+        else f"Categories such as <b>{low_base_str}</b> have very small baselines (< 5 accounts). Shifts of 1-2 people generate extreme percentages (-100% or +66.7%). These are normal small-base variations rather than operational issues."
     )
 
     guide_point3 = (
-        f"Prioritaskan evaluasi saluran promosi & follow-up pada <b>{l_name if l_name else 'kategori yang menurun'}</b> dan kategori penunjang (seperti <b>UMKM</b>) untuk mencegah berlanjutnya penurunan volume, sembari mereplikasi pola sukses <b>{g_name if g_name else 'kategori unggulan'}</b> ke cabang-cabang lainnya."
+        f"Prioritaskan evaluasi saluran promosi & repeat order pada <b>{l_name if l_name else 'kategori yang menurun'}</b> dan kategori penunjang (seperti <b>UMKM</b>) untuk memulihkan laju intake, sembari mereplikasi strategi sukses <b>{g_name if g_name else 'kategori unggulan'}</b> (+{g_net:,} customer) ke cabang-cabang lainnya."
         if not is_en
-        else f"Prioritize marketing audits on <b>{l_name if l_name else 'declining segments'}</b> and <b>SME</b> to prevent further volume leakage, while standardizing sales playbooks from <b>{g_name if g_name else 'lead categories'}</b> across all branches."
+        else f"Prioritize marketing audits and follow-ups on <b>{l_name if l_name else 'declining segments'}</b> and <b>SME</b> to restore intake momentum, while scaling proven playbooks from <b>{g_name if g_name else 'lead categories'}</b> (+{g_net:,} accounts) across all branches."
     )
 
     st.markdown(f"""
@@ -745,7 +898,7 @@ if not cat_growth_df.empty:
     </div>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; font-size: 13px; line-height: 1.55;">
         <div>
-            <div style="font-weight: 700; color: #3B82F6; margin-bottom: 4px;">{'1. Jangan Terkecoh Persentase Semata' if not is_en else '1. Real Volume Outweighs Percentages'}</div>
+            <div style="font-weight: 700; color: #3B82F6; margin-bottom: 4px;">{'1. Pahami: Perolehan Baru ≠ Pelanggan Kabur' if not is_en else '1. Clarify: Intake Decline ≠ Customer Churn'}</div>
             <span>{guide_point1}</span>
         </div>
         <div>
