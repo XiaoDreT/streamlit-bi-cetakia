@@ -38,13 +38,35 @@ def normalize_date_column(series: pd.Series) -> pd.Series:
 
 @st.cache_data(show_spinner=False)
 def load_customer_data() -> pd.DataFrame:
-    """Loads 01_customer_master_raw.csv with normalized datetime types."""
-    path = resolve_data_path('01_customer_master_raw.csv')
-    df = pd.read_csv(path)
-    for date_col in ['customer_created_at', 'customer_updated_at']:
-        if date_col in df.columns:
-            df[date_col] = normalize_date_column(df[date_col])
-    return df
+    """Loads the latest customer master dataset (data_customer.csv / customer_data.csv up to 12 Nov 2026)
+    enriched with contact fields from 01_customer_master_raw.csv for backwards compatibility across all dashboards."""
+    try:
+        df_latest = load_new_customer_master().copy()
+        if 'is_deleted_customer' in df_latest.columns:
+            df_latest = df_latest[~df_latest['is_deleted_customer']].copy()
+        df_latest['customer_category'] = df_latest['category_name']
+
+        # Enrich with contact details (phone, email, address_ship, address_bill, contact_name, cluster) from 01_customer_master_raw.csv
+        try:
+            raw_path = resolve_data_path('01_customer_master_raw.csv')
+            df_raw = pd.read_csv(raw_path, low_memory=False)
+            extra_cols = [c for c in ['customer_id', 'contact_name', 'phone', 'email', 'address_ship', 'address_bill', 'cluster', 'customer_updated_at'] if c in df_raw.columns]
+            df_raw_sub = df_raw[extra_cols].drop_duplicates(subset=['customer_id'])
+            df_latest = df_latest.merge(df_raw_sub, on='customer_id', how='left')
+            if 'customer_updated_at' in df_latest.columns:
+                df_latest['customer_updated_at'] = normalize_date_column(df_latest['customer_updated_at'])
+        except Exception:
+            pass
+        return df_latest
+    except Exception:
+        path = resolve_data_path('01_customer_master_raw.csv')
+        df = pd.read_csv(path, low_memory=False)
+        for date_col in ['customer_created_at', 'customer_updated_at']:
+            if date_col in df.columns:
+                df[date_col] = normalize_date_column(df[date_col])
+        if 'customer_category' in df.columns:
+            df = df[df['customer_category'].astype(str).str.strip().str.upper() != 'DIVISI'].copy()
+        return df
 
 load_customer_master = load_customer_data
 
@@ -80,15 +102,56 @@ def load_product_data(include_cancelled: bool = False) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def load_customer_intelligence() -> pd.DataFrame:
-    """Loads 04_customer_intelligence_analysis.csv with normalized datetime types
-    and reconciles customer lifetime spend, order count, and health with confirmed
-    non-cancelled sales transactions from 02_sales_transaction_extract.csv.
+    """Loads 04_customer_intelligence_analysis.csv, synchronizes customer master population
+    with the latest customer dataset (data_customer.csv up to 12 Nov 2026), and reconciles
+    customer lifetime spend, order count, and health with confirmed non-cancelled sales transactions.
     """
     path = resolve_data_path('04_customer_intelligence_analysis.csv')
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, low_memory=False)
     for date_col in ['first_purchase_date', 'last_purchase_date']:
         if date_col in df.columns:
             df[date_col] = normalize_date_column(df[date_col])
+
+    # Synchronize with latest master customer dataset (12 Nov 2026) so newly registered customers are included
+    try:
+        df_master = load_customer_data()
+        master_cols = ['customer_id', 'customer_code', 'customer_name', 'customer_category', 'division_code', 'division_name']
+        avail_master_cols = [c for c in master_cols if c in df_master.columns]
+        df_master_sub = df_master[avail_master_cols].drop_duplicates(subset=['customer_id'])
+
+        # Filter df to valid non-deleted master customers and update latest metadata
+        valid_ids = set(df_master_sub['customer_id'])
+        df = df[df['customer_id'].isin(valid_ids)].copy()
+
+        # Update metadata columns from latest master data
+        meta_update = df_master_sub.set_index('customer_id')
+        for col in ['customer_code', 'customer_name', 'customer_category', 'division_code', 'division_name']:
+            if col in meta_update.columns:
+                df[col] = df['customer_id'].map(meta_update[col]).fillna(df.get(col))
+
+        # Append new customers from latest master data not yet in 04_customer_intelligence_analysis.csv
+        existing_ids = set(df['customer_id'])
+        new_cust_df = df_master_sub[~df_master_sub['customer_id'].isin(existing_ids)].copy()
+        if not new_cust_df.empty:
+            new_cust_df['total_orders'] = 0
+            new_cust_df['first_purchase_date'] = pd.NaT
+            new_cust_df['last_purchase_date'] = pd.NaT
+            new_cust_df['lifetime_sales'] = 0.0
+            new_cust_df['average_order_value'] = 0.0
+            new_cust_df['total_discount'] = 0.0
+            new_cust_df['lifetime_invoice_value'] = 0.0
+            new_cust_df['active_purchase_month'] = 0
+            new_cust_df['days_since_last_purchase'] = float('nan')
+            new_cust_df['repeat_flag'] = 'One Time Customer'
+            new_cust_df['customer_health'] = 'New'
+            new_cust_df['R_score'] = float('nan')
+            new_cust_df['F_score'] = 1
+            new_cust_df['M_score'] = float('nan')
+            new_cust_df['RFM_score'] = 'nan1nan'
+            new_cust_df['rfm_segment'] = 'Low Engagement'
+            df = pd.concat([df, new_cust_df], ignore_index=True)
+    except Exception:
+        pass
 
     # Reconcile with confirmed non-cancelled sales to ensure cancelled invoices are not counted as revenue
     try:
@@ -108,7 +171,7 @@ def load_customer_intelligence() -> pd.DataFrame:
         df.loc[valid_mask, 'total_orders'] = df.loc[valid_mask, '_actual_orders']
         df.loc[valid_mask, 'average_order_value'] = df.loc[valid_mask, '_actual_ltv'] / df.loc[valid_mask, '_actual_orders']
 
-        # Cancel-only customers: reset to 0 and reclassify health as 'New'
+        # Cancel-only or 0-order customers: reset to 0 and reclassify health as 'New'
         cancel_only_mask = df['_actual_orders'].isna() | (df['_actual_orders'] == 0)
         df.loc[cancel_only_mask, 'lifetime_sales'] = 0.0
         df.loc[cancel_only_mask, 'total_orders'] = 0
@@ -220,17 +283,22 @@ def load_finance_cohort_summary() -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def load_new_customer_master() -> pd.DataFrame:
-    """Loads and standardizes master customer dataset for New Customer Dashboard.
-    Prioritizes data/new_customer_eda.csv (Cetakia production extract).
+    """Loads and standardizes master customer dataset for New Customer & Customer Growth Dashboards.
+    Prioritizes data/data_customer.csv (and data/new_customer_eda.csv).
     Falls back to 01_customer_master_raw.csv if not found.
     Applies Cetakia Business Rule: new_customer_valid_date = registration_date + 2 days.
     """
-    try:
-        path = resolve_data_path('new_customer_eda.csv')
-    except Exception:
-        path = resolve_data_path('01_customer_master_raw.csv')
+    path = None
+    for candidate_name in ['data_customer.csv', 'customer_data.csv', 'new_customer_eda.csv', '01_customer_master_raw.csv']:
+        try:
+            path = resolve_data_path(candidate_name)
+            break
+        except Exception:
+            continue
+    if path is None:
+        raise FileNotFoundError("Could not locate data_customer.csv, customer_data.csv, new_customer_eda.csv, or 01_customer_master_raw.csv")
 
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, low_memory=False)
 
     # Normalize datetime columns
     if 'created_at_jakarta' in df.columns:
@@ -277,25 +345,50 @@ def load_new_customer_master() -> pd.DataFrame:
     else:
         df['category_code'] = df['category_name']
 
+    # Exclude internal company division accounts ('DIVISI') so customer analytics focus strictly on external customers
+    df = df[df['category_name'].astype(str).str.upper() != 'DIVISI'].copy()
+
     # Division standardization
     df['division_name'] = df['division_name'].fillna('Unknown Division').astype(str).str.strip()
     df['division_code'] = df['division_code'].fillna('UNK').astype(str).str.strip().str.upper() if 'division_code' in df.columns else 'UNK'
     df['division_id'] = df['division_id'].astype(str) if 'division_id' in df.columns else '0'
     df['customer_category_id'] = df['category_code'] + '_' + df['division_code']
 
+    # Safe boolean parsing helper
+    def _to_bool(series: pd.Series) -> pd.Series:
+        if series.dtype == bool:
+            return series.fillna(False)
+        return series.fillna(False).astype(str).str.strip().str.lower().isin(['true', '1', 'yes', 'y', 't'])
+
     # Status & Flags
-    df['prospect'] = df['prospect'].fillna(False).astype(bool) if 'prospect' in df.columns else False
-    df['inactive'] = df['inactive'].fillna(False).astype(bool) if 'inactive' in df.columns else False
-    if 'is_deleted_customer' in df.columns:
-        df['is_deleted_customer'] = df['is_deleted_customer'].fillna(False).astype(bool)
-    else:
-        df['is_deleted_customer'] = False
+    df['prospect'] = _to_bool(df['prospect']) if 'prospect' in df.columns else False
+    df['inactive'] = _to_bool(df['inactive']) if 'inactive' in df.columns else False
+    df['is_deleted_customer'] = _to_bool(df['is_deleted_customer']) if 'is_deleted_customer' in df.columns else False
 
     if 'customer_deleted_at' not in df.columns:
         df['customer_deleted_at'] = None
+        df['deleted_date'] = None
+    else:
+        del_dt = normalize_date_column(df['customer_deleted_at'])
+        df['deleted_date'] = del_dt.dt.date
+
+    # Churn / Berhenti tracking (Deleted or Inactive)
+    df['is_churned'] = df['is_deleted_customer'] | df['inactive']
+    # If churned via deletion, use deleted_date; if churned via inactive without deleted_date, use registration_date
+    df['churn_date'] = df['deleted_date'].where(df['deleted_date'].notna(), df['registration_date'].where(df['inactive'], None))
+
+    # Flag initial system migration baseline (Jan 5-8, 2026 bulk import of existing customer database)
+    df['is_initial_baseline'] = df['registration_date'] <= pd.to_datetime('2026-01-08').date()
+
     df['company_id'] = df['company_id'].fillna('CG-001') if 'company_id' in df.columns else 'CG-001'
-    df['data_quality_status'] = 'Valid'
+    if 'data_quality_status' not in df.columns:
+        df['data_quality_status'] = 'OK'
     df['category_division_match'] = True
 
     return df
+
+@st.cache_data(show_spinner=False)
+def load_customer_growth_data() -> pd.DataFrame:
+    """Loads data/data_customer.csv specifically for the Customer Growth Orientation Dashboard."""
+    return load_new_customer_master()
 

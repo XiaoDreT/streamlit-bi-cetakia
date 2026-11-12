@@ -1492,3 +1492,393 @@ def compute_cetakia_realtime_acquisition_stats(
         "df_l30": l30
     }
 
+
+# -------------------------------------------------------------
+# CUSTOMER GROWTH ORIENTATION (CGR FORMULA ENGINE)
+# -------------------------------------------------------------
+def compute_cgr_period_summary(
+    df: pd.DataFrame,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    division: str = None,
+    category: str = None,
+    date_basis: str = "registration_date"
+) -> dict:
+    """
+    Computes Customer Growth Rate (CGR) metrics strictly adhering to the two formulas:
+    1) Pendekatan Jumlah Pelanggan Baru & Keluar (Net CGR):
+       CGR = ((Pelanggan Baru - Pelanggan Berhenti (Churn)) / Jumlah Pelanggan Awal Periode) * 100%
+           = ((Pelanggan Akhir Periode - Pelanggan Awal Periode) / Jumlah Pelanggan Awal Periode) * 100%
+    2) Rumus Dasar pada Referensi Visual (Rasio Pelanggan Akhir dikurangi Baru terhadap Awal):
+       CGR_Rumus1 = ((Pelanggan Akhir Periode - Pelanggan Baru Didapat) / Pelanggan Awal Periode) * 100%
+    3) Pertumbuhan Laju Akuisisi Baru Antar-Periode (Period-over-Period New Customer Intake Growth):
+       PoP_Baru = ((Pelanggan Baru Periode Ini - Pelanggan Baru Periode Lalu) / Pelanggan Baru Periode Lalu) * 100%
+    """
+    if df.empty:
+        return {
+            "pelanggan_awal": 0, "pelanggan_baru": 0, "pelanggan_churn": 0,
+            "churn_deleted": 0, "churn_inactive": 0, "pelanggan_akhir": 0,
+            "net_growth": 0, "cgr_net_pct": 0.0, "cgr_rumus1_pct": 0.0,
+            "prev_baru": 0, "diff_baru_pop": 0, "pop_baru_pct": 0.0,
+            "period_days": 0, "eff_start_date": start_date, "eff_end_date": end_date,
+            "prev_start_date": start_date, "prev_end_date": end_date,
+            "is_full_year_baseline": False,
+            "df_filtered": df, "df_awal": df, "df_baru": df, "df_churn": df, "df_prev_baru": df
+        }
+
+    data = df.copy()
+    if "category_name" in data.columns:
+        data = data[data["category_name"].astype(str).str.upper() != "DIVISI"]
+    if division and division not in ["All Branches", "Semua Cabang"]:
+        data = data[data["division_name"] == division]
+    if category and category not in ["All Segments", "Semua Segmen"]:
+        data = data[data["category_name"] == category.upper()]
+
+    if isinstance(start_date, (pd.Timestamp, str)):
+        start_date = pd.to_datetime(start_date).date()
+    if isinstance(end_date, (pd.Timestamp, str)):
+        end_date = pd.to_datetime(end_date).date()
+
+    date_col = date_basis if date_basis in data.columns else "registration_date"
+    init_cutoff = datetime.date(2026, 1, 8) if date_col == "registration_date" else datetime.date(2026, 1, 10)
+
+    # Check if start_date falls on or before the initial bulk migration cutoff (Jan 5-8, 2026)
+    if start_date <= init_cutoff:
+        is_full_year_baseline = True
+        eff_start = init_cutoff + datetime.timedelta(days=1)
+        eff_end = max(eff_start, end_date)
+        df_awal = data[data[date_col] <= init_cutoff]
+        df_baru = data[(data[date_col] >= eff_start) & (data[date_col] <= eff_end)]
+        df_churn = data[data["is_churned"] & (data["churn_date"].notna()) & (data["churn_date"] <= eff_end)]
+    else:
+        is_full_year_baseline = False
+        eff_start = start_date
+        eff_end = end_date
+        # Active customers before eff_start (registered before eff_start and not churned before eff_start)
+        not_churned_before = (~data["is_churned"]) | (data["churn_date"].isna()) | (data["churn_date"] >= eff_start)
+        df_awal = data[(data[date_col] < eff_start) & not_churned_before]
+        df_baru = data[(data[date_col] >= eff_start) & (data[date_col] <= eff_end)]
+        df_churn = data[data["is_churned"] & (data["churn_date"].notna()) & (data["churn_date"] >= eff_start) & (data["churn_date"] <= eff_end)]
+
+    period_days = max(1, (eff_end - eff_start).days + 1)
+    prev_end_date = eff_start - datetime.timedelta(days=1)
+    prev_start_date = prev_end_date - datetime.timedelta(days=period_days - 1)
+    # Exclude initial bulk migration dates (<= init_cutoff) from previous organic acquisition comparison if applicable
+    df_prev_baru = data[(data[date_col] >= max(prev_start_date, init_cutoff + datetime.timedelta(days=1))) & (data[date_col] <= prev_end_date)]
+
+    pelanggan_awal = int(df_awal["customer_id"].nunique())
+    pelanggan_baru = int(df_baru["customer_id"].nunique())
+    pelanggan_churn = int(df_churn["customer_id"].nunique())
+    churn_deleted = int(df_churn[df_churn["is_deleted_customer"]]["customer_id"].nunique()) if not df_churn.empty else 0
+    churn_inactive = int(df_churn[df_churn["inactive"] & (~df_churn["is_deleted_customer"])]["customer_id"].nunique()) if not df_churn.empty else 0
+
+    pelanggan_akhir = pelanggan_awal + pelanggan_baru - pelanggan_churn
+    net_growth = pelanggan_baru - pelanggan_churn
+
+    if pelanggan_awal > 0:
+        cgr_net_pct = round((net_growth / pelanggan_awal) * 100.0, 2)
+        cgr_rumus1_pct = round(((pelanggan_akhir - pelanggan_baru) / pelanggan_awal) * 100.0, 2)
+    else:
+        cgr_net_pct = 0.0
+        cgr_rumus1_pct = 0.0
+
+    prev_baru = int(df_prev_baru["customer_id"].nunique())
+    diff_baru_pop = pelanggan_baru - prev_baru
+    if prev_baru > 0:
+        pop_baru_pct = round((diff_baru_pop / prev_baru) * 100.0, 1)
+    else:
+        pop_baru_pct = 0.0
+
+    return {
+        "pelanggan_awal": pelanggan_awal,
+        "pelanggan_baru": pelanggan_baru,
+        "pelanggan_churn": pelanggan_churn,
+        "churn_deleted": churn_deleted,
+        "churn_inactive": churn_inactive,
+        "pelanggan_akhir": pelanggan_akhir,
+        "net_growth": net_growth,
+        "cgr_net_pct": cgr_net_pct,
+        "cgr_rumus1_pct": cgr_rumus1_pct,
+        "prev_baru": prev_baru,
+        "diff_baru_pop": diff_baru_pop,
+        "pop_baru_pct": pop_baru_pct,
+        "period_days": period_days,
+        "eff_start_date": eff_start,
+        "eff_end_date": eff_end,
+        "prev_start_date": prev_start_date,
+        "prev_end_date": prev_end_date,
+        "is_full_year_baseline": is_full_year_baseline,
+        "df_filtered": data,
+        "df_awal": df_awal,
+        "df_baru": df_baru,
+        "df_churn": df_churn,
+        "df_prev_baru": df_prev_baru
+    }
+
+
+def compute_cgr_monthly_breakdown(
+    df: pd.DataFrame,
+    division: str = None,
+    category: str = None,
+    date_basis: str = "registration_date"
+) -> pd.DataFrame:
+    """
+    Computes month-by-month CGR progression across 2026 (2026-01 to 2026-11).
+    For 2026-01, uses the initial bulk migration (<= Jan 8 / Jan 10) as Pelanggan Awal Periode,
+    and organic registrations in the rest of January as Pelanggan Baru Didapat.
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    data = df.copy()
+    if "category_name" in data.columns:
+        data = data[data["category_name"].astype(str).str.upper() != "DIVISI"]
+    if division and division not in ["All Branches", "Semua Cabang"]:
+        data = data[data["division_name"] == division]
+    if category and category not in ["All Segments", "Semua Segmen"]:
+        data = data[data["category_name"] == category.upper()]
+
+    date_col = date_basis if date_basis in data.columns else "registration_date"
+    init_cutoff = datetime.date(2026, 1, 8) if date_col == "registration_date" else datetime.date(2026, 1, 10)
+
+    data["_ym"] = pd.to_datetime(data[date_col]).dt.strftime("%Y-%m")
+    data["_churn_ym"] = pd.to_datetime(data["churn_date"]).dt.strftime("%Y-%m") if "churn_date" in data.columns else None
+
+    months = sorted(data["_ym"].dropna().unique().tolist())
+    month_names_id = {
+        "2026-01": "Jan 2026", "2026-02": "Feb 2026", "2026-03": "Mar 2026",
+        "2026-04": "Apr 2026", "2026-05": "Mei 2026", "2026-06": "Jun 2026",
+        "2026-07": "Jul 2026", "2026-08": "Agu 2026", "2026-09": "Sep 2026",
+        "2026-10": "Okt 2026", "2026-11": "Nov 2026 (Berjalan)"
+    }
+    month_names_en = {
+        "2026-01": "Jan 2026", "2026-02": "Feb 2026", "2026-03": "Mar 2026",
+        "2026-04": "Apr 2026", "2026-05": "May 2026", "2026-06": "Jun 2026",
+        "2026-07": "Jul 2026", "2026-08": "Aug 2026", "2026-09": "Sep 2026",
+        "2026-10": "Oct 2026", "2026-11": "Nov 2026 (MTD)"
+    }
+
+    awal = int(data[data[date_col] <= init_cutoff]["customer_id"].nunique())
+    prev_baru = None
+    records = []
+
+    for m in months:
+        if m == "2026-01":
+            m_df = data[(data["_ym"] == m) & (data[date_col] > init_cutoff)]
+            baru = int(m_df["customer_id"].nunique())
+            active_days = 23
+        else:
+            m_df = data[data["_ym"] == m]
+            baru = int(m_df["customer_id"].nunique())
+            if not m_df.empty:
+                min_d = pd.to_datetime(m_df[date_col].min()).date()
+                max_d = pd.to_datetime(m_df[date_col].max()).date()
+                active_days = max(1, (max_d - min_d.replace(day=1)).days + 1)
+            else:
+                active_days = 30
+
+        churn_df = data[data["is_churned"] & (data["_churn_ym"] == m)]
+        churn = int(churn_df["customer_id"].nunique())
+        akhir = awal + baru - churn
+        net_growth = baru - churn
+
+        cgr_net = round((net_growth / awal) * 100.0, 2) if awal > 0 else 0.0
+        cgr_r1 = round(((akhir - baru) / awal) * 100.0, 2) if awal > 0 else 0.0
+        avg_daily = round(baru / max(1, active_days), 1)
+
+        if prev_baru is not None and prev_baru > 0:
+            mom_diff = baru - prev_baru
+            mom_baru = round((mom_diff / prev_baru) * 100.0, 1)
+            if m == "2026-11":
+                mom_disp_id = f"Berjalan {active_days} hari (~{avg_daily:.0f}/hari)"
+                mom_disp_en = f"MTD {active_days} days (~{avg_daily:.0f}/day)"
+            elif mom_diff >= 0:
+                mom_disp_id = f"Naik +{mom_diff:,} akun (+{mom_baru:.1f}%)"
+                mom_disp_en = f"Up +{mom_diff:,} accts (+{mom_baru:.1f}%)"
+            else:
+                mom_disp_id = f"Turun {mom_diff:,} akun ({mom_baru:.1f}%)"
+                mom_disp_en = f"Down {mom_diff:,} accts ({mom_baru:.1f}%)"
+        else:
+            mom_diff = 0
+            mom_baru = 0.0
+            mom_disp_id = "Bulan Awal (Baseline)"
+            mom_disp_en = "Initial Month (Baseline)"
+
+        # User-oriented decision insight per month
+        if m == "2026-11":
+            proj_nov = int(round(avg_daily * 30))
+            decision_id = f"⏳ Bulan Berjalan ({active_days} hari): Estimasi tembus ~+{proj_nov:,} pelanggan di akhir bulan; kejar promo akhir tahun."
+            decision_en = f"⏳ Month-to-Date ({active_days} days): Pacing for ~+{proj_nov:,} accounts by month-end; push year-end promos."
+        elif cgr_net >= 10.0:
+            decision_id = "🚀 Ekspansi Puncak: Lonjakan tertinggi tahun ini; jadikan pola akuisisi cabang Cianjur & Digital sebagai acuan."
+            decision_en = "🚀 Peak Expansion: Highest surge of the year; replicate Cianjur & Digital onboarding playbook."
+        elif mom_diff > 0 and baru >= 950:
+            decision_id = "🟢 Akselerasi Kuat: Laju akuisisi >33 akun/hari; fokuskan CS mengonversi akun baru menjadi pembeli berulang."
+            decision_en = "🟢 Strong Acceleration: Intake >33/day; focus CS on converting new registrations into repeat buyers."
+        elif mom_diff > 0:
+            decision_id = "🔵 Momentum Rebound: Akuisisi naik kembali dibanding bulan lalu (didorong lonjakan segmen AGEN); perkuat program kemitraan."
+            decision_en = "🔵 Rebound Momentum: Intake rebounded vs prior month (driven by AGEN surge); expand reseller incentives."
+        elif baru >= 850:
+            decision_id = "🟢 Pertumbuhan Sehat: Akuisisi terjaga di atas 850 akun/bulan; pertahankan ritme kampanye promosi reguler."
+            decision_en = "🟢 Healthy Expansion: Intake sustained above 850/month; maintain regular promotional cadence."
+        else:
+            decision_id = "🟡 Laju Melambat: Penambahan pelanggan turun dibanding bulan sebelumnya; perlu aktivasi promo cabang & dorongan segmen UMKM."
+            decision_en = "🟡 Slowing Intake: New additions dipped vs prior month; launch branch promos & reactivate SME outreach."
+
+        records.append({
+            "year_month": m,
+            "month_label_id": month_names_id.get(m, m),
+            "month_label_en": month_names_en.get(m, m),
+            "pelanggan_awal": awal,
+            "pelanggan_baru": baru,
+            "pelanggan_churn": churn,
+            "pelanggan_akhir": akhir,
+            "net_growth": net_growth,
+            "cgr_net_pct": cgr_net,
+            "cgr_rumus1_pct": cgr_r1,
+            "active_days": active_days,
+            "avg_daily_new": avg_daily,
+            "mom_diff_baru": mom_diff,
+            "mom_baru_pct": mom_baru,
+            "mom_disp_id": mom_disp_id,
+            "mom_disp_en": mom_disp_en,
+            "decision_id": decision_id,
+            "decision_en": decision_en
+        })
+        awal = akhir
+        prev_baru = baru
+
+    return pd.DataFrame(records)
+
+
+def compute_cgr_by_dimension(
+    df: pd.DataFrame,
+    group_col: str,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    division: str = None,
+    category: str = None,
+    date_basis: str = "registration_date"
+) -> pd.DataFrame:
+    """
+    Computes exact CGR breakdown across each item in `group_col` ('category_name' or 'division_name')
+    for the selected period [start_date, end_date].
+    Includes layman-friendly interpretation for each segment/branch.
+    """
+    if df.empty or group_col not in df.columns:
+        return pd.DataFrame()
+
+    data = df.copy()
+    if "category_name" in data.columns:
+        data = data[data["category_name"].astype(str).str.upper() != "DIVISI"]
+    if division and division not in ["All Branches", "Semua Cabang"]:
+        data = data[data["division_name"] == division]
+    if category and category not in ["All Segments", "Semua Segmen"]:
+        data = data[data["category_name"] == category.upper()]
+
+    if isinstance(start_date, (pd.Timestamp, str)):
+        start_date = pd.to_datetime(start_date).date()
+    if isinstance(end_date, (pd.Timestamp, str)):
+        end_date = pd.to_datetime(end_date).date()
+
+    date_col = date_basis if date_basis in data.columns else "registration_date"
+    init_cutoff = datetime.date(2026, 1, 8) if date_col == "registration_date" else datetime.date(2026, 1, 10)
+
+    if start_date <= init_cutoff:
+        eff_start = init_cutoff + datetime.timedelta(days=1)
+        eff_end = max(eff_start, end_date)
+        df_awal = data[data[date_col] <= init_cutoff]
+        df_baru = data[(data[date_col] >= eff_start) & (data[date_col] <= eff_end)]
+        df_churn = data[data["is_churned"] & (data["churn_date"].notna()) & (data["churn_date"] <= eff_end)]
+    else:
+        eff_start = start_date
+        eff_end = end_date
+        not_churned_before = (~data["is_churned"]) | (data["churn_date"].isna()) | (data["churn_date"] >= eff_start)
+        df_awal = data[(data[date_col] < eff_start) & not_churned_before]
+        df_baru = data[(data[date_col] >= eff_start) & (data[date_col] <= eff_end)]
+        df_churn = data[data["is_churned"] & (data["churn_date"].notna()) & (data["churn_date"] >= eff_start) & (data["churn_date"] <= eff_end)]
+
+    period_days = max(1, (eff_end - eff_start).days + 1)
+    prev_end_date = eff_start - datetime.timedelta(days=1)
+    prev_start_date = prev_end_date - datetime.timedelta(days=period_days - 1)
+    df_prev_baru = data[(data[date_col] >= max(prev_start_date, init_cutoff + datetime.timedelta(days=1))) & (data[date_col] <= prev_end_date)]
+
+    groups = sorted(data[group_col].dropna().unique().tolist())
+    awal_map = df_awal.groupby(group_col)["customer_id"].nunique().to_dict() if not df_awal.empty else {}
+    baru_map = df_baru.groupby(group_col)["customer_id"].nunique().to_dict() if not df_baru.empty else {}
+    churn_map = df_churn.groupby(group_col)["customer_id"].nunique().to_dict() if not df_churn.empty else {}
+    prev_baru_map = df_prev_baru.groupby(group_col)["customer_id"].nunique().to_dict() if not df_prev_baru.empty else {}
+
+    total_awal_all = max(1, sum(awal_map.values()))
+    total_baru_all = max(1, sum(baru_map.values()))
+    total_churn_all = sum(churn_map.values())
+    overall_cgr_bench = ((sum(baru_map.values()) - total_churn_all) / total_awal_all * 100.0) if sum(awal_map.values()) > 0 else 0.0
+    rows = []
+
+    for g in groups:
+        awal = int(awal_map.get(g, 0))
+        baru = int(baru_map.get(g, 0))
+        churn = int(churn_map.get(g, 0))
+        prev_b = int(prev_baru_map.get(g, 0))
+        akhir = awal + baru - churn
+        net = baru - churn
+        avg_daily_g = round(baru / max(1, period_days), 1)
+
+        cgr_net = round((net / awal) * 100.0, 2) if awal > 0 else 0.0
+        cgr_r1 = round(((akhir - baru) / awal) * 100.0, 2) if awal > 0 else 0.0
+        share_baru = round((baru / total_baru_all) * 100.0, 1) if sum(baru_map.values()) > 0 else 0.0
+        diff_pop = baru - prev_b
+        pop_pct = round((diff_pop / prev_b) * 100.0, 1) if prev_b > 0 else 0.0
+        formula_calc_str = f"({net:,} ÷ {awal:,}) × 100%" if awal > 0 else "—"
+
+        # Relative, decision-oriented classification compared to company CGR benchmark
+        if net <= 0:
+            status_id = "⚪ Stagnan / Tidak Bertambah"
+            status_en = "⚪ Flat / No Net Addition"
+            summary_id = f"Belum ada penambahan bersih pada periode ini; perlu aktivasi promo khusus untuk {g}."
+            summary_en = f"No net additions in this period; launch targeted outreach for {g}."
+        elif cgr_net >= overall_cgr_bench * 1.15:
+            status_id = "🚀 Tumbuh Sangat Pesat (Di Atas Rata-rata)"
+            status_en = "🚀 Rapid Growth (Above Benchmark)"
+            summary_id = f"CGR +{cgr_net:.2f}% melampaui rata-rata (+{overall_cgr_bench:.2f}%); pertahankan akuisisi & kunci repeat order."
+            summary_en = f"CGR +{cgr_net:.2f}% beats benchmark (+{overall_cgr_bench:.2f}%); sustain intake & lock in repeat orders."
+        elif share_baru >= 25.0 or cgr_net >= overall_cgr_bench * 0.85:
+            status_id = "🟢 Penopang Utama (Tumbuh Stabil)"
+            status_en = "🟢 Core Engine (Steady Growth)"
+            summary_id = f"Menyumbang +{baru:,} pelanggan baru (+{avg_daily_g:.1f}/hari); jaga layanan CS agar aktif belanja ulang."
+            summary_en = f"Contributes +{baru:,} new accounts (+{avg_daily_g:.1f}/day); focus CS on repeat purchase retention."
+        else:
+            status_id = "🟡 Tumbuh Moderat (Perlu Akselerasi)"
+            status_en = "🟡 Moderate Growth (Needs Push)"
+            summary_id = f"CGR +{cgr_net:.2f}% masih di bawah rata-rata (+{overall_cgr_bench:.2f}%); dorong promo & paket akuisisi baru."
+            summary_en = f"CGR +{cgr_net:.2f}% trails benchmark (+{overall_cgr_bench:.2f}%); boost promotional bundles & lead outreach."
+
+        rows.append({
+            "group_name": g,
+            "pelanggan_awal": awal,
+            "pelanggan_baru": baru,
+            "pelanggan_churn": churn,
+            "pelanggan_akhir": akhir,
+            "net_growth": net,
+            "avg_daily_new": avg_daily_g,
+            "formula_calc_str": formula_calc_str,
+            "cgr_net_pct": cgr_net,
+            "cgr_rumus1_pct": cgr_r1,
+            "share_baru_pct": share_baru,
+            "prev_baru": prev_b,
+            "diff_pop": diff_pop,
+            "pop_pct": pop_pct,
+            "status_id": status_id,
+            "status_en": status_en,
+            "summary_id": summary_id,
+            "summary_en": summary_en
+        })
+
+    res_df = pd.DataFrame(rows)
+    if not res_df.empty:
+        total_akhir_all = max(1, res_df["pelanggan_akhir"].sum())
+        res_df["share_akhir_pct"] = (res_df["pelanggan_akhir"] / total_akhir_all * 100.0).round(1)
+        res_df = res_df.sort_values(by="pelanggan_baru", ascending=False).reset_index(drop=True)
+    return res_df
+
+

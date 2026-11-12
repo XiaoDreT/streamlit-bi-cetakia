@@ -34,12 +34,12 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------
-# 1. LOAD MASTER DATASET (CACHED FROM new_customer_eda.csv)
+# 1. LOAD MASTER DATASET (CACHED FROM data_customer.csv)
 # -------------------------------------------------------------
 try:
     df_customer_master = load_new_customer_master()
 except Exception as e:
-    st.error(f"Data New Customer belum dapat dimuat: {e}. Silakan periksa file dataset new_customer_eda.csv.")
+    st.error(f"Data New Customer belum dapat dimuat: {e}. Silakan periksa file dataset data_customer.csv.")
     st.stop()
 
 # -------------------------------------------------------------
@@ -66,7 +66,7 @@ if pd.notna(latest_data_dt):
     month_str = dt_obj.strftime("%b") if is_en else dt_obj.strftime("%b")
     latest_data_str = f"{dt_obj.strftime('%d')} {month_str} {dt_obj.strftime('%Y %H:%M')}"
 else:
-    latest_data_str = "26 Oct 2026 13:43" if is_en else "26 Okt 2026 13:43"
+    latest_data_str = "12 Nov 2026 08:47" if is_en else "12 Nov 2026 08:47"
 
 # -------------------------------------------------------------
 # 3. PAGE HEADER & ACTIVE GLOBAL SCOPE STRIP
@@ -279,19 +279,20 @@ elif selected_pill in ["This Week", "Minggu Ini"]:
     bi_start = max_valid_date - datetime.timedelta(days=6)
     bi_end = max_valid_date
 elif selected_pill in ["This Month", "Bulan Ini"]:
-    bi_start = datetime.date(2026, 10, 1)
+    bi_start = max_valid_date.replace(day=1)
     bi_end = max_valid_date
 elif selected_pill in ["Last Month", "Bulan Lalu"]:
-    bi_start = datetime.date(2026, 9, 1)
-    bi_end = datetime.date(2026, 9, 30)
+    last_month_end = max_valid_date.replace(day=1) - datetime.timedelta(days=1)
+    bi_start = last_month_end.replace(day=1)
+    bi_end = last_month_end
 elif selected_pill in ["This Year", "Tahun Ini"]:
-    bi_start = datetime.date(2026, 1, 1)
+    bi_start = datetime.date(max_valid_date.year, 1, 1)
     bi_end = max_valid_date
 elif selected_pill in ["Last Year", "Tahun Lalu"]:
-    bi_start = datetime.date(2025, 1, 1)
-    bi_end = datetime.date(2025, 12, 31)
+    bi_start = datetime.date(max_valid_date.year - 1, 1, 1)
+    bi_end = datetime.date(max_valid_date.year - 1, 12, 31)
 else:
-    bi_start = datetime.date(2026, 9, 29)
+    bi_start = max_valid_date - datetime.timedelta(days=29)
     bi_end = max_valid_date
 
 # If Custom is chosen, display clean date input
@@ -1200,4 +1201,4 @@ with f1:
 with f2:
     st.caption("🛡️ **Data Hygiene:** Calculation basis `COUNT(DISTINCT customer_id)`" if is_en else "🛡️ **Data Hygiene:** Basis perhitungan `COUNT(DISTINCT customer_id)`")
 with f3:
-    st.caption("⚡ **Data Mode:** Master Historical Customer Dataset Cetakia BI (`new_customer_eda.csv`)" if is_en else "⚡ **Mode Data:** Master Historical Customer Dataset Cetakia BI (`new_customer_eda.csv`)")
+    st.caption("⚡ **Data Mode:** Master Historical Customer Dataset Cetakia BI (`data_customer.csv`)" if is_en else "⚡ **Mode Data:** Master Historical Customer Dataset Cetakia BI (`data_customer.csv`)")

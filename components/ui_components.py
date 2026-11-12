@@ -118,7 +118,9 @@ TRANSLATIONS = {
         "fin_intel_title": "Dashboard Intelijen Keuangan",
         "fin_intel_sub": "Realisasi Kas Masuk, Pemantauan Umur Piutang (Aging), Perilaku Pembayaran Pelanggan & Prioritas Penagihan",
         "new_cust_title": "Dashboard New Customer",
-        "new_cust_sub": "Pantau pertumbuhan customer baru berdasarkan periode, kategori customer, dan division."
+        "new_cust_sub": "Pantau pertumbuhan customer baru berdasarkan periode, kategori customer, dan division.",
+        "cgr_title": "Customer Growth Orientation",
+        "cgr_sub": "Analisis Pertumbuhan Pelanggan Berbasis Formula CGR (Pelanggan Awal, Pelanggan Baru, Churn & Pelanggan Akhir) dengan Visualisasi Ramah User"
     },
     "EN": {
         "app_title": "Cetakia BI — Decision Support System",
@@ -179,7 +181,9 @@ TRANSLATIONS = {
         "fin_intel_title": "Finance Intelligence Dashboard",
         "fin_intel_sub": "Cash Conversion, Aging Receivable Monitoring, Customer Payment Behavior & Collection Priority",
         "new_cust_title": "New Customer Dashboard",
-        "new_cust_sub": "Monitor new customer growth by period, customer category, and division."
+        "new_cust_sub": "Monitor new customer growth by period, customer category, and division.",
+        "cgr_title": "Customer Growth Orientation",
+        "cgr_sub": "Customer Growth Rate (CGR) Formula Analytics (Initial Base, New Intake, Churn & Ending Base) with Layman-Friendly Visuals"
     }
 }
 
@@ -613,6 +617,52 @@ def render_summary_strip(items: list):
 </div>"""
     st.markdown(f'<div style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">{cards_html}</div>', unsafe_allow_html=True)
 
+def render_layman_summary_box(
+    title: str,
+    plain_summary: str,
+    key_takeaway: str,
+    recommended_action: str,
+    formula_note: str = None,
+    lang_code: str = "ID",
+    accent_color: str = "#10B981"
+):
+    """Renders a dedicated, super user-friendly summary card after each chart/insight
+    designed specifically so non-technical readers (User) can grasp the insight in seconds."""
+    is_en = (lang_code == "EN")
+    lbl_header = "📖 Plain-Language Summary (Easy to Understand)" if is_en else "📖 Ringkasan Mudah Dipahami (Panduan User)"
+    lbl_summary = "💬 In Simple Terms (What Happened?)" if is_en else "💬 Bahasa Sederhananya (Apa yang Terjadi?)"
+    lbl_takeaway = "🎯 Why Does This Matter?" if is_en else "🎯 Apa Artinya Bagi Bisnis Kita?"
+    lbl_action = "✅ Practical Next Step" if is_en else "✅ Langkah Praktis yang Disarankan"
+    lbl_formula = "🧮 Formula Connection:" if is_en else "🧮 Kaitan dengan Rumus CGR:"
+
+    formula_html = (
+        f'<div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(156,163,175,0.3); font-size: 12.5px; opacity: 0.9;">'
+        f'<b>{lbl_formula}</b> {formula_note}</div>'
+    ) if formula_note else ""
+
+    html = f"""<div style="background-color: var(--secondary-background-color, rgba(16, 185, 129, 0.05)); border: 1px solid rgba(156, 163, 175, 0.28); border-left: 5px solid {accent_color}; border-radius: 10px; padding: 16px 20px; margin-top: 8px; margin-bottom: 22px; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+<div style="font-weight: 800; font-size: 15px; color: {accent_color};">{lbl_header}: {title}</div>
+<span style="background-color: rgba(16, 185, 129, 0.14); color: {accent_color}; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 12px;">USER-FRIENDLY INSIGHT SUMMARY</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; font-size: 13.5px; line-height: 1.55;">
+<div style="background-color: rgba(59, 130, 246, 0.06); border-radius: 8px; padding: 12px 14px; border: 1px solid rgba(59, 130, 246, 0.18);">
+<div style="font-weight: 700; color: #3B82F6; margin-bottom: 4px; font-size: 12.5px;">{lbl_summary}</div>
+<div style="color: var(--text-color, inherit);">{plain_summary}</div>
+</div>
+<div style="background-color: rgba(245, 158, 11, 0.06); border-radius: 8px; padding: 12px 14px; border: 1px solid rgba(245, 158, 11, 0.18);">
+<div style="font-weight: 700; color: #F59E0B; margin-bottom: 4px; font-size: 12.5px;">{lbl_takeaway}</div>
+<div style="color: var(--text-color, inherit);">{key_takeaway}</div>
+</div>
+<div style="background-color: rgba(16, 185, 129, 0.08); border-radius: 8px; padding: 12px 14px; border: 1px solid rgba(16, 185, 129, 0.22);">
+<div style="font-weight: 700; color: #10B981; margin-bottom: 4px; font-size: 12.5px;">{lbl_action}</div>
+<div style="color: var(--text-color, inherit);">{recommended_action}</div>
+</div>
+</div>
+{formula_html}
+</div>"""
+    st.markdown(html, unsafe_allow_html=True)
+
 def render_insight_card(title: str, metric: str, context: str, insight: str, action: str, badge: str = "DECISION RULE"):
     """Renders mandatory 4-part DSS insight card unindented."""
     lang_code = st.session_state.get("lang_code", "ID")
@@ -836,6 +886,7 @@ def global_sidebar_filters(df_sales=None, df_customers=None):
     st.session_state["global_branch_norm"] = norm_branch
     
     # Customer Segment Filter (Persistent across navigation, resets on browser refresh)
+    # Excludes internal company 'Divisi' accounts to focus strictly on external customers (7 categories)
     segment_options = [
         t["all_segments"],
         "Instansi",
@@ -844,8 +895,7 @@ def global_sidebar_filters(df_sales=None, df_customers=None):
         "Sekolah",
         "UMKM",
         "Industri",
-        "Employee",
-        "Divisi"
+        "Employee"
     ]
     saved_segment = st.session_state.get("global_segment_norm", "All Segments")
     if saved_segment in ["All Segments", "Semua Segmen"]:
@@ -887,7 +937,7 @@ def global_sidebar_filters(df_sales=None, df_customers=None):
         date_range = saved_date_range
     
     st.sidebar.markdown("---")
-    cutoff_date_str = "October 3, 2026" if lang_code == "EN" else "3 Oktober 2026"
+    cutoff_date_str = "November 12, 2026" if lang_code == "EN" else "12 November 2026"
     data_mode_str = "Master Analytical Data" if lang_code == "EN" else "Master Data Analitis"
     st.sidebar.caption(f"📌 **{t['snapshot_cutoff']}:** {cutoff_date_str}")
     st.sidebar.caption(f"⚡ **{t['data_mode']}:** {data_mode_str}")
